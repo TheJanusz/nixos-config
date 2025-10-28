@@ -7,6 +7,10 @@ in
   #];
   #programs.gnupg.enable = true;
   programs.git = {
-    enable = true;   
+    enable = true;
+    settings = {
+      user.name = "TheJanusz";
+      user.email = "pietrzyk.janusz1@gmail.com";
+    };
   };
 }

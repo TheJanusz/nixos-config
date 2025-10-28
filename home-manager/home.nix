@@ -8,8 +8,10 @@
 
   imports = [
     ../modules/home/browser.nix
+    ../modules/home/communication.nix
     ../modules/home/git.nix
     ../modules/home/nvim.nix
+    ../modules/home/ripping.nix
     ../modules/home/waybar.nix
     ../modules/home/zsh.nix
     # Server
@@ -38,12 +40,11 @@
     nautilus # file manager
     btop # system monitoring TUI
     clipse # clipboard TUI
-    discord
     #megasync
     obsidian
     libreoffice-qt6-fresh
     nextcloud-client
-
+    rofi
     ruby_3_4
     #nerdfonts.override { fonts = [ "BigBlueTerminal" ]; }
     # # Adds the 'hello' command to your environment. It prints a friendly
@@ -62,7 +63,7 @@
     # (pkgs.writeShellScriptBin "my-hello" ''
     #   echo "Hello, ${config.home.username}!"
     # '')
-  ];  
+  ];
 
   programs.kitty.enable = true;
   wayland.windowManager.hyprland.enable = true;
@@ -77,6 +78,7 @@
       "SUPER, N, exec, nvim"
       "SUPER, D, exec, discord"
       "SUPER, P, exec, bitwarden"
+      "SUPER, R, exec, rofi -show run"
       # Moving window focus
       "SUPER, LEFT, movefocus, l"
       "SUPER, RIGHT, movefocus, r"
@@ -105,8 +107,8 @@
       natural_scroll = false;
     };
     monitor = [
-      "eDP-1, 1920x1200@165,0x0,1"
-      #"DP-2, 3840x2160@60,1920x0,1"
+      "DP-4, 2560x1400@60,0x0,1,transform,3"
+      "DP-5, 2560x1440@60,1440x0,1"
     ];
     decoration = {
       rounding = 5;    

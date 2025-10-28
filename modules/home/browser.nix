@@ -8,7 +8,7 @@ in
 
   programs.brave = {
     enable = true;
-    # package = pkgs.brave;
+    #package = pkgs.brave;
     extensions = [
       { id = "hnmpcagpplmpfojmgmnngilcnanddlhb"; } # Windscribe
       { id = "nngceckbapebfimnlniiiahkandclblb"; } # Bitwarden
@@ -16,6 +16,8 @@ in
       { id = "lcdlignfoefnkcfejmlnegoobondbfjb"; } # Display youtube dislikes
       { id = "eimadpbcbfnmbkopoojfekhnkhdbieeh"; } # Dark Reader
     ];
+    #defaultSearchProviderEnabled = true;
+    #defaultSearchProviderSearchURL = "https://startpage.com";
   };
 
   programs.firefox.enable = true;

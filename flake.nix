@@ -31,7 +31,7 @@
 	    specialArgs = { inherit system; };
 
 	    modules = [
-	      ./asus-laptop/nixos/configuration.nix
+	      ./desktop/nixos/configuration.nix
 	    ];
 	  };
 	};

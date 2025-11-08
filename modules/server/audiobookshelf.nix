@@ -1,6 +1,5 @@
 { config, pkgs, ... }:
 let
-  audiobookshelf = pkgs.audiobookshelf;
 in
 {
   #imports = [
@@ -11,10 +10,13 @@ in
   services.audiobookshelf = {
     enable = true;
     package = pkgs.audiobookshelf;
+    host = "0.0.0.0";
+    openFirewall = true;
   };
 
   services.nginx = {
     enable = true;
+    clientMaxBodySize = "10G";
     recommendedProxySettings = true;
       virtualHosts."localhost" = {
         #forceSSL = true; # Optional, but highly recommended

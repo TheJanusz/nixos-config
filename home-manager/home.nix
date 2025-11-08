@@ -1,6 +1,16 @@
 { config, pkgs, lib, ... }:
 
-{
+let
+  libbluray = pkgs.libbluray.override {
+    withAACS = true;
+    withBDplus = true;
+  };
+  customVLC = pkgs.vlc.override { inherit libbluray; };
+  customFFMPEG = pkgs.ffmpeg.override {
+    inherit libbluray;
+  };
+in
+  {
   # Home Manager needs a bit of information about you and the paths it should
   # manage.
   home.username = "lord";
@@ -10,13 +20,14 @@
     ../modules/home/browser.nix
     ../modules/home/communication.nix
     ../modules/home/git.nix
+    ../modules/home/hyprland.nix
     ../modules/home/nvim.nix
     ../modules/home/ripping.nix
     ../modules/home/waybar.nix
     ../modules/home/zsh.nix
     # Server
-    #./modules/server/audiobookshelf.nix
-    #./modules/server/nextcloud.nix
+    #../modules/server/audiobookshelf.nix
+    #../modules/server/nextcloud.nix
   ];
 
   # This value determines the Home Manager release that your configuration is
@@ -30,22 +41,42 @@
 
   nixpkgs.config.allowUnfreePredicate = pkg:
     builtins.elem (lib.getName pkg) [
-      "discord" "megasync" "obsidian"
+      "discord"
+      "megasync"
+      "obsidian"
+      "makemkv"
     ];
 
   # The home.packages option allows you to install Nix packages into your
   # environment.
+
   home.packages = with pkgs; [
-    bitwarden
+    bitwarden-desktop
+
+    # Game dev
+    blender
+    godot
+
+    libbluray
+    customFFMPEG
+    makemkv
+
     nautilus # file manager
     btop # system monitoring TUI
     clipse # clipboard TUI
-    #megasync
-    obsidian
+    gtypist # typing practice
+    # megasync
+    megacmd
+    obsidian # Notetaking
+    qownnotes # Alternative notetaking
     libreoffice-qt6-fresh
     nextcloud-client
-    rofi
-    ruby_3_4
+    rofi # application launcher
+    customVLC
+    subtitleedit
+    devenv
+    # mp3splt # Audio file splitting by .cue files. Useful for audiobooks. Not in unstable.
+    #lgogdownloader
     #nerdfonts.override { fonts = [ "BigBlueTerminal" ]; }
     # # Adds the 'hello' command to your environment. It prints a friendly
     # # "Hello, world!" when run.
@@ -65,60 +96,11 @@
     # '')
   ];
 
-  programs.kitty.enable = true;
-  wayland.windowManager.hyprland.enable = true;
-  wayland.windowManager.hyprland.settings = {
-    bind = [
-      "SUPER, F, exec, thunar"
-      "SUPER, B, exec, brave"
-      "SUPER, RETURN, exec, kitty"
-      "SUPER, W, killactive"
-      "SUPER, M, exec, kitty -e btop"
-      "SUPER, O, exec, obsidian"
-      "SUPER, N, exec, nvim"
-      "SUPER, D, exec, discord"
-      "SUPER, P, exec, bitwarden"
-      "SUPER, R, exec, rofi -show run"
-      # Moving window focus
-      "SUPER, LEFT, movefocus, l"
-      "SUPER, RIGHT, movefocus, r"
-      "SUPER, UP, movefocus, u"
-      "SUPER, DOWN, movefocus, d"
-    ];
-    bindle = [
-      ",XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+"
-      ",XF86AudioLowerVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%-"
-    ];
-    bindl = [
-      ",XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_SOURCE@ toggle"
-      ",XF86AudioMute, exec, wpctl set-mute @DEFAULT_SINK@ toggle"
-    ];
-    exec-once = ["waybar"];
-    general = {
-      "col.active_border" = "0xff0000ff";
-      gaps_in = 2;
-      gaps_out = 4;
-    };
-    gesture = [
-      "3, horizontal, workspace"
-    ];
-    input = {
-      kb_layout = "pl";
-      natural_scroll = false;
-    };
-    monitor = [
-      "DP-4, 2560x1400@60,0x0,1,transform,3"
-      "DP-5, 2560x1440@60,1440x0,1"
-    ];
-    decoration = {
-      rounding = 5;    
-    };
-    windowrule = [
-      "opacity 1.0 0.8,class:.+"
-    ];
+  programs.direnv = {
+    enable = true;
+    enableZshIntegration = true;
+    nix-direnv.enable = true;
   };
-
-  wayland.windowManager.hyprland.plugins = [];
 
   # Home Manager is pretty good at managing dotfiles. The primary way to manage
   # plain files is through 'home.file'.

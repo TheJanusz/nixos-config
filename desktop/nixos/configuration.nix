@@ -8,10 +8,15 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ../../modules/server/audiobookshelf.nix
       ../../modules/system/gaming.nix
+      ../../modules/system/hosts.nix
+      ../../modules/server/jellyfin.nix
+      ../../modules/system/crypt.nix
     ];
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.graphics.enable = true;
+  hardware.keyboard.zsa.enable = true;
   hardware.nvidia = {
 
     # Modesetting is required.
@@ -48,6 +53,7 @@
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+  boot.kernelModules = [ "sg" ];
 
   boot.initrd.luks.devices."luks-ab17d948-8316-44fb-95f9-afc9188ce30a".device = "/dev/disk/by-uuid/ab17d948-8316-44fb-95f9-afc9188ce30a";
   networking.hostName = "nixos"; # Define your hostname.
@@ -89,6 +95,10 @@
     builtins.elem (lib.getName pkg) [
       "nvidia-x11" "nvidia-settings"
     ];
+   nix.extraOptions = ''
+     extra-substituters = https://devenv.cachix.org
+     extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
+   '';
 
   # Enable the X11 windowing system.
   # services.xserver.enable = true;
@@ -138,14 +148,13 @@
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
   programs.zsh.enable = true;
-  users.users.lord = {
+  users.users."lord" = {
     isNormalUser = true;
     description = "TheJanusz";
     extraGroups = [ "networkmanager" "wheel" ];
     shell = pkgs.zsh;
-    packages = with pkgs; [
-    #  thunderbird
-    ];
+    # packages = with pkgs; [
+    # ];
   };
 
   # Install firefox.

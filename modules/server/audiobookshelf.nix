@@ -9,7 +9,7 @@ in
 
   services.audiobookshelf = {
     enable = true;
-    package = pkgs.audiobookshelf;
+    package = pkgs.unstable.audiobookshelf;
     host = "0.0.0.0";
     openFirewall = true;
   };

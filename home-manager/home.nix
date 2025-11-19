@@ -23,6 +23,7 @@ in
     ../modules/home/hyprland.nix
     ../modules/home/nvim.nix
     ../modules/home/ripping.nix
+    ../modules/home/video_production.nix
     ../modules/home/waybar.nix
     ../modules/home/zsh.nix
     # Server
@@ -44,7 +45,6 @@ in
       "discord"
       "megasync"
       "obsidian"
-      "makemkv"
     ];
 
   # The home.packages option allows you to install Nix packages into your
@@ -59,7 +59,6 @@ in
 
     libbluray
     customFFMPEG
-    makemkv
 
     nautilus # file manager
     btop # system monitoring TUI
@@ -75,6 +74,8 @@ in
     customVLC
     subtitleedit
     devenv
+    ollama
+    freetube
     # mp3splt # Audio file splitting by .cue files. Useful for audiobooks. Not in unstable.
     #lgogdownloader
     #nerdfonts.override { fonts = [ "BigBlueTerminal" ]; }

@@ -18,6 +18,11 @@
   outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, nixvim, ... }@inputs:
     let
       system = "x86_64-linux";
+      overlay-unstable = final: prev: {
+        unstable = import nixpkgs-unstable {
+          inherit (final) system config;
+        };
+      };
       pkgs = import nixpkgs-unstable {
         inherit system;
 	config = {
@@ -31,6 +36,9 @@
 	    specialArgs = { inherit system; };
 
 	    modules = [
+              {
+                nixpkgs.overlays = [ overlay-unstable ];
+              }
 	      ./desktop/nixos/configuration.nix
 	    ];
 	  };

@@ -21,6 +21,9 @@ in
     #defaultSearchProviderSearchURL = "https://startpage.com";
   };
 
-  programs.firefox.enable = true;
+  programs.firefox = {
+    enable = true;
+    package = pkgs.firefox-devedition;
+  };
 }
 

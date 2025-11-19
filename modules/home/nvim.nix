@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 let
   
 in
@@ -15,6 +15,7 @@ in
       relativenumber = true;
       shiftwidth = 2;
       expandtab = true;
+      scrolloff = 10;
       smartindent = true;
       smarttab = true;
       undofile = true;
@@ -42,6 +43,11 @@ in
       comment.enable = true;
       git-conflict.enable = true;
       lualine.enable = true;
+      mini-snippets = {
+        enable = true;
+        settings = {
+        };
+      };
       nix.enable = true;
       nvim-autopairs.enable = true;
       # obsidian.enable = true;
@@ -61,5 +67,8 @@ in
 	};
       };
     };
+    extraPlugins = [
+      pkgs.vimPlugins.boole-nvim
+    ];
   };
 }

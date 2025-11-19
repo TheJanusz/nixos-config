@@ -6,10 +6,10 @@ in
   #imports = [
   #];
 
-  environment.etc."nextcloud-admin-pass".text = "Kappa#781227";
+  environment.etc."nextcloud-admin-pass".text = "Testing123";
   services.nextcloud = {
     enable = false;
-    package = pkgs.nextcloud31;
+    package = pkgs.nextcloud32;
     hostName = "localhost";
     config.adminpassFile = "/etc/nextcloud-admin-pass";
     config.dbtype = "sqlite";

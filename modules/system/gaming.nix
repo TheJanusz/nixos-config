@@ -17,8 +17,8 @@ in
   };
 
   environment.systemPackages = with pkgs; [
-    heroic
-    lutris
+    unstable.heroic
+    unstable.lutris
   ];
 }
 

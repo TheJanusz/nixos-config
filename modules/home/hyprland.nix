@@ -3,11 +3,14 @@ let
   #neovim = pkgs.neovim;
 in
 {
+  home.packages = with pkgs; [
+    grimblast # screenshots
+  ];
   programs.kitty.enable = true;
   wayland.windowManager.hyprland.enable = true;
   wayland.windowManager.hyprland.settings = {
     bind = [
-      "SUPER, F, exec, thunar"
+      "SUPER, F, exec, nautilus"
       "SUPER, B, exec, brave"
       "SUPER, RETURN, exec, kitty"
       "SUPER, W, killactive"
@@ -27,6 +30,8 @@ in
       "SUPER Shift, J, movewindow, d"
       "SUPER Shift, K, movewindow, u"
       "SUPER Shift, L, movewindow, r"
+      
+      "SUPER Shift, F, fullscreen"
     ];
     bindle = [
       ",XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+"

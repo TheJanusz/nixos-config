@@ -76,6 +76,10 @@ in
     devenv
     ollama
     freetube
+    
+    # testing
+    gimp
+    inkscape
     # mp3splt # Audio file splitting by .cue files. Useful for audiobooks. Not in unstable.
     #lgogdownloader
     #nerdfonts.override { fonts = [ "BigBlueTerminal" ]; }

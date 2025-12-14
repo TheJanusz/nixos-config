@@ -1,11 +1,7 @@
 { config, pkgs, ... }:
 let
-  #neovim = pkgs.neovim;
 in
 {
-  #imports = [
-  #];
-
   programs.zsh = {
     enable = true;
     history.size = 10000;

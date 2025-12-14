@@ -1,0 +1,8 @@
+<profile>
+  <name>Custom</name>
+  <mkvSettings insertFirstChapter00IfMissing="true" />
+  <outputSettings name="FLAC" outputFormat="FLAC">
+    <extraArgs>-compression_level 12</extraArgs>
+  </outputSettings>
+</profile>
+

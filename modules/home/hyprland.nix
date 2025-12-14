@@ -31,7 +31,14 @@ in
       "SUPER Shift, K, movewindow, u"
       "SUPER Shift, L, movewindow, r"
       
+      "SUPER Shift, left, workspace, r-1"
+      "SUPER Shift, right, workspace, r+1"
+      "SUPER Shift, Q, movetoworkspace, r-1"
+      "SUPER Shift, E, movetoworkspace, r+1"
       "SUPER Shift, F, fullscreen"
+      # Screenshots
+      "SUPER Shift, A, exec, grimblast copysave area"
+      "SUPER Shift, W, exec, grimblast copysave active"
     ];
     bindle = [
       ",XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+"
@@ -55,9 +62,10 @@ in
       natural_scroll = false;
     };
     monitor = [
-      "HDMI-A-2,disable,3840x2160@60,-1440x0,1"
-      "DP-4, 2560x1400@60,0x0,1,transform,3"
+      "HDMI-A-2,3840x2160@60,-1920x0,2"
+      "DP-4, 2560x1440@60,0x0,1,transform,3"
       "DP-5, 2560x1440@60,1440x0,1"
+      "Unknown-1,disabled"
     ];
     decoration = {
       rounding = 5;

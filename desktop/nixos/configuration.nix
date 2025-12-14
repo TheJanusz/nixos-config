@@ -8,15 +8,18 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ../../modules/system/options.nix
       ../../modules/server/audiobookshelf.nix
       ../../modules/system/gaming.nix
       ../../modules/system/hosts.nix
       ../../modules/server/jellyfin.nix
       ../../modules/system/crypt.nix
     ];
+
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.graphics.enable = true;
   hardware.keyboard.zsa.enable = true;
+  multipleAllowedUnfreePredicate = [ "nvidia-x11" "nvidia-settings" ];
   hardware.nvidia = {
 
     # Modesetting is required.
@@ -65,6 +68,7 @@
 
   # Enable networking
   networking.networkmanager.enable = true;
+  networking.nameservers = [ "9.9.9.9" ];
 
   # Set your time zone.
   time.timeZone = "Europe/Warsaw";
@@ -91,14 +95,12 @@
   #services.xserver.displayManager.lightdm.enable = true;
   #services.xserver.desktopManager.xfce.enable = true;
 
-  nixpkgs.config.allowUnfreePredicate = pkg:
-    builtins.elem (lib.getName pkg) [
-      "nvidia-x11" "nvidia-settings"
-    ];
-   nix.extraOptions = ''
-     extra-substituters = https://devenv.cachix.org
-     extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
-   '';
+  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) config.multipleAllowedUnfreePredicate;
+
+  nix.extraOptions = ''
+    extra-substituters = https://devenv.cachix.org
+    extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
+  '';
 
   # Enable the X11 windowing system.
   # services.xserver.enable = true;
@@ -126,6 +128,11 @@
 
   # Enable CUPS to print documents.
   services.printing.enable = true;
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true;
+    openFirewall = true;
+  };
 
   # Enable sound with pipewire.
   services.pulseaudio.enable = false;
@@ -136,7 +143,7 @@
     alsa.support32Bit = true;
     pulse.enable = true;
     # If you want to use JACK applications, uncomment this
-    jack.enable = true;
+    # jack.enable = true;
 
     # use the example session manager (no others are packaged yet so this is enabled by default,
     # no need to redefine it in your config for now)
@@ -147,12 +154,13 @@
   # services.xserver.libinput.enable = true;
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
-  programs.zsh.enable = true;
+  # programs.zsh.enable = true;
   users.users."lord" = {
     isNormalUser = true;
     description = "TheJanusz";
     extraGroups = [ "networkmanager" "wheel" ];
     shell = pkgs.zsh;
+    ignoreShellProgramCheck = true;
     # packages = with pkgs; [
     # ];
   };
@@ -161,7 +169,7 @@
   programs.firefox.enable = true;
 
   # Allow unfree packages
-  nixpkgs.config.allowUnfree = true;
+  # nixpkgs.config.allowUnfree = true;
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
@@ -197,5 +205,5 @@
   # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "25.05"; # Did you read the comment?
-
 }
+

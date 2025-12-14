@@ -1,35 +1,13 @@
 { config, pkgs, lib, ... }:
 
 let
-  libbluray = pkgs.libbluray.override {
-    withAACS = true;
-    withBDplus = true;
-  };
-  customVLC = pkgs.vlc.override { inherit libbluray; };
-  customFFMPEG = pkgs.ffmpeg.override {
-    inherit libbluray;
-  };
+
 in
-  {
+{
   # Home Manager needs a bit of information about you and the paths it should
   # manage.
   home.username = "lord";
   home.homeDirectory = "/home/lord";
-
-  imports = [
-    ../modules/home/browser.nix
-    ../modules/home/communication.nix
-    ../modules/home/git.nix
-    ../modules/home/hyprland.nix
-    ../modules/home/nvim.nix
-    ../modules/home/ripping.nix
-    ../modules/home/video_production.nix
-    ../modules/home/waybar.nix
-    ../modules/home/zsh.nix
-    # Server
-    #../modules/server/audiobookshelf.nix
-    #../modules/server/nextcloud.nix
-  ];
 
   # This value determines the Home Manager release that your configuration is
   # compatible with. This helps avoid breakage when a new Home Manager release
@@ -49,16 +27,12 @@ in
 
   # The home.packages option allows you to install Nix packages into your
   # environment.
-
   home.packages = with pkgs; [
     bitwarden-desktop
 
     # Game dev
     blender
     godot
-
-    libbluray
-    customFFMPEG
 
     nautilus # file manager
     btop # system monitoring TUI
@@ -71,7 +45,6 @@ in
     libreoffice-qt6-fresh
     nextcloud-client
     rofi # application launcher
-    customVLC
     subtitleedit
     devenv
     ollama
@@ -80,6 +53,8 @@ in
     # testing
     gimp
     inkscape
+    ares-cli # WebOS management
+    libxml2 # Just for xmllint
     # mp3splt # Audio file splitting by .cue files. Useful for audiobooks. Not in unstable.
     #lgogdownloader
     #nerdfonts.override { fonts = [ "BigBlueTerminal" ]; }
@@ -142,6 +117,25 @@ in
     EDITOR = "nvim";
   };
 
+  # home.sessionPath = [
+  #   "#{home.homeDirectory}/nixos-config/bin"
+  # ];
+
   # Let Home Manager install and manage itself.
   programs.home-manager.enable = true;
+
+  imports = [
+    ../modules/home/browser.nix
+    ../modules/home/communication.nix
+    ../modules/home/git.nix
+    ../modules/home/hyprland.nix
+    ../modules/home/nvim.nix
+    ../modules/home/ripping.nix
+    ../modules/home/video_production.nix
+    ../modules/home/waybar.nix
+    ../modules/home/zsh.nix
+    # Server
+    #../modules/server/audiobookshelf.nix
+    #../modules/server/nextcloud.nix
+  ];
 }

@@ -6,6 +6,10 @@ in
   imports = [
   ];
 
+  home.packages = with pkgs; [
+    ripgrep-all
+  ];
+
   programs.nixvim = {
     enable = true;
 
@@ -41,6 +45,7 @@ in
         ];
       };
       comment.enable = true;
+      emmet.enable = true;
       git-conflict.enable = true;
       lualine.enable = true;
       mini-snippets = {
@@ -50,7 +55,11 @@ in
       };
       nix.enable = true;
       nvim-autopairs.enable = true;
-      # obsidian.enable = true;
+      obsidian = {
+        enable = false; # Need to figure out how to configure it properly
+        settings = {
+        };
+      };
       telescope.enable = true;
       treesitter.enable = true;
       web-devicons = {
@@ -60,11 +69,24 @@ in
         enable = true;
 	servers = {
 	  nixd.enable = true;
-          ruby_lsp.enable = true;
-          rubocop.enable = true;
-          standardrb.enable = true;
+          ruby_lsp = {
+            enable = true;
+            package = pkgs.rubyPackages_3_4.ruby-lsp;
+          };
+          rubocop = {
+            enable = true;
+            package = pkgs.rubyPackages_3_4.rubocop;
+            cmd = ["bin/rubocop" "--lsp" "-c" ".rubocop.yml"];
+          };
+          # standardrb.enable = true;
           tailwindcss.enable = true;
-	};
+        };
+        keymaps = {
+          diagnostic = {
+            "<leader>j" = "goto_next";
+            "<leader>k" = "goto_prev";
+          };
+        };
       };
     };
     extraPlugins = [

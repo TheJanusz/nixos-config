@@ -1,6 +1,12 @@
 { config, lib, pkgs, ... }:
 
 let
+  libblurayAACS = pkgs.libbluray.override {
+    withAACS = true;
+    withBDplus = true;
+  };
+  customFFMPEG = pkgs.ffmpeg.override { libbluray = libblurayAACS; };
+  customVLC = pkgs.vlc.override { libbluray = libblurayAACS; };
   # 2.9.3+ adds a fix for 1 track CD's, but it hasn't released yet
   abcdeOverlay = (final: prev: {
     abcde = if prev.abcde.version == "2.9.3" then
@@ -20,7 +26,9 @@ in
   nixpkgs.overlays = [ abcdeOverlay ];
   home.packages = with pkgs; [
     abcde # CD ripping
-    mkvtoolnix-cli # Mostly for editing chapter info
+    customFFMPEG
+    customVLC
+    mkvtoolnix # Mostly for editing chapter info. Also ripping problematic titles from badly authored dvds
     picard # Adding stuff to MusicBrainz
     yt-dlp # Downloading stuff from video sites
   ];

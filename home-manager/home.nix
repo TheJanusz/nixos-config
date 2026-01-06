@@ -1,8 +1,5 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, osConfig, ... }:
 
-let
-
-in
 {
   # Home Manager needs a bit of information about you and the paths it should
   # manage.
@@ -24,6 +21,9 @@ in
       "megasync"
       "obsidian"
     ];
+  # nixpkgs.config.multipleAllowUnfreePredicate = [
+  #   "discord" "megasync" "obsidian"
+  # ];
 
   # The home.packages option allows you to install Nix packages into your
   # environment.
@@ -49,11 +49,12 @@ in
     devenv
     ollama
     freetube
+    ruby_4_0
     
     # testing
     gimp
     inkscape
-    ares-cli # WebOS management
+    # ares-cli # WebOS management
     libxml2 # Just for xmllint
     # mp3splt # Audio file splitting by .cue files. Useful for audiobooks. Not in unstable.
     #lgogdownloader
@@ -135,7 +136,7 @@ in
     ../modules/home/waybar.nix
     ../modules/home/zsh.nix
     # Server
-    #../modules/server/audiobookshelf.nix
-    #../modules/server/nextcloud.nix
+    # ../modules/server/audiobookshelf.nix
+    # ../modules/server/nextcloud.nix
   ];
 }

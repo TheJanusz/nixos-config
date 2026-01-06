@@ -10,7 +10,7 @@ in
     };
     oh-my-zsh = {
       enable = true;
-      plugins = [ "git" "bundler" ];
+      plugins = [ "git" "bundler" "gpg-agent" ];
       theme = "gentoo";
     };
   };

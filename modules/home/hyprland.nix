@@ -63,7 +63,7 @@ in
     };
     monitor = [
       "HDMI-A-2,3840x2160@60,-1920x0,2"
-      "DP-4, 2560x1440@60,0x0,1,transform,3"
+      "DP-4, 2560x1440@120,0x0,1,transform,3"
       "DP-5, 2560x1440@60,1440x0,1"
       "Unknown-1,disabled"
     ];
@@ -71,7 +71,7 @@ in
       rounding = 5;
     };
     windowrule = [
-      "opacity 1.0 0.8,class:.+"
+      # "opacity 1.0 0.8,class:.+"
       # "fullscreen, 0, tag:game"
       # "immediate, tag:game"
     ];

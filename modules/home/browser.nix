@@ -12,10 +12,11 @@ in
     extensions = [
       { id = "hnmpcagpplmpfojmgmnngilcnanddlhb"; } # Windscribe
       { id = "nngceckbapebfimnlniiiahkandclblb"; } # Bitwarden
-      { id = "ankepacjgoajhjpenegknbefpmfffdic"; } # disable-youtube-shorts
-      { id = "lcdlignfoefnkcfejmlnegoobondbfjb"; } # Display youtube dislikes
+      { id = "ponfpcnoihfmfllpaingbgckeeldkhle"; } # Enhancer for YouTube
       { id = "eimadpbcbfnmbkopoojfekhnkhdbieeh"; } # Dark Reader
-      { id = "ndpmhjnlfkgfalaieeneneenijondgag"; } # YouTube Anti Translate
+      # { id = "ankepacjgoajhjpenegknbefpmfffdic"; } # disable-youtube-shorts
+      # { id = "lcdlignfoefnkcfejmlnegoobondbfjb"; } # Display youtube dislikes
+      # { id = "ndpmhjnlfkgfalaieeneneenijondgag"; } # YouTube Anti Translate
     ];
     #defaultSearchProviderEnabled = true;
     #defaultSearchProviderSearchURL = "https://startpage.com";

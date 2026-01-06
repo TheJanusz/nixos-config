@@ -9,17 +9,17 @@
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
       ../../modules/system/options.nix
-      ../../modules/server/audiobookshelf.nix
+      # ../../modules/server/audiobookshelf.nix
       ../../modules/system/gaming.nix
       ../../modules/system/hosts.nix
       ../../modules/server/jellyfin.nix
       ../../modules/system/crypt.nix
     ];
 
+  multipleAllowedUnfreePredicate = [ "nvidia-x11" "nvidia-settings" "cuda-merged" "cuda_cuobjdump" "cuda_gdb" "cuda_nvcc" "cuda_nvdisasm" "cuda_nvprune" "cuda_cccl" "cuda_cudart" "cuda_cupti" "cuda_cuxxfilt" "cuda_nvml_dev" "cuda_nvrtc" "cuda_nvtx" "cuda_profiler_api" "cuda_sanitizer_api" "libcublas" "libcufft" "libcurand" "libcusolver" "libnvjitlink" "libcusparse" "libnpp" ];
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.graphics.enable = true;
-  hardware.keyboard.zsa.enable = true;
-  multipleAllowedUnfreePredicate = [ "nvidia-x11" "nvidia-settings" ];
+  hardware.keyboard.zsa.enable = true; 
   hardware.nvidia = {
 
     # Modesetting is required.
@@ -48,10 +48,13 @@
     nvidiaSettings = true;
 
     # Optionally, you may need to select the appropriate driver version for your specific GPU.
-    package = config.boot.kernelPackages.nvidiaPackages.latest; 
+    package = config.boot.kernelPackages.nvidiaPackages.stable; 
   };
 
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    download-buffer-size = 52428899;
+  };
 
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
@@ -59,16 +62,16 @@
   boot.kernelModules = [ "sg" ];
 
   boot.initrd.luks.devices."luks-ab17d948-8316-44fb-95f9-afc9188ce30a".device = "/dev/disk/by-uuid/ab17d948-8316-44fb-95f9-afc9188ce30a";
+
+  # Enable networking
   networking.hostName = "nixos"; # Define your hostname.
+  networking.networkmanager.enable = true;
+  networking.nameservers = [ "9.9.9.9" ];
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
   # Configure network proxy if necessary
   # networking.proxy.default = "http://user:password@proxy:port/";
   # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
-
-  # Enable networking
-  networking.networkmanager.enable = true;
-  networking.nameservers = [ "9.9.9.9" ];
 
   # Set your time zone.
   time.timeZone = "Europe/Warsaw";
@@ -123,6 +126,11 @@
     variant = "programmer";
   };
 
+  services.locate = {
+    enable = true;
+    package = pkgs.mlocate;
+  };
+
   # Configure console keymap
   console.keyMap = "pl2";
 
@@ -174,9 +182,10 @@
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-    vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
+    neovim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
     home-manager
     cifs-utils
+    cudaPackages.cudatoolkit
   ];
 
   # Some programs need SUID wrappers, can be configured further or are

@@ -31,6 +31,7 @@
       };
     in
       {
+        repl = { inherit inputs; pkgs = import nixpkgs-unstable { system = "x86_64-linux"; }; };
         nixosConfigurations = {
 	  myNixos = nixpkgs.lib.nixosSystem {
 	    specialArgs = { inherit system; };

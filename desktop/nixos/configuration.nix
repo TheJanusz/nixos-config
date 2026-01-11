@@ -11,7 +11,6 @@
       ../../modules/system/options.nix
       # ../../modules/server/audiobookshelf.nix
       ../../modules/system/gaming.nix
-      ../../modules/system/hosts.nix
       ../../modules/server/jellyfin.nix
       ../../modules/system/crypt.nix
     ];

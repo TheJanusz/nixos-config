@@ -1,20 +1,8 @@
 { config, lib, pkgs, ... }:
 
 let  
-  #config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) ["steam" "steam-unwrapped"];
 in
 {
-# WIP: gpg still doesn't see YubiKey
-  # environment.systemPackages = with pkgs; [
-  #   gnupg
-  # ];
-
-  # programs.ssh = {
-  #   startAgent = true;
-  # };
-  # hardware.gpgSmartcards.enable = true;
-  # services.pcscd.enable = true; # Needed for Yubikey
-  # services.yubikey-agent.enable = true;
   programs.gnupg = {
     agent.enable = true;
     agent.enableSSHSupport = true;

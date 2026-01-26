@@ -15,8 +15,8 @@ in
       { id = "ponfpcnoihfmfllpaingbgckeeldkhle"; } # Enhancer for YouTube
       { id = "eimadpbcbfnmbkopoojfekhnkhdbieeh"; } # Dark Reader
       # { id = "ankepacjgoajhjpenegknbefpmfffdic"; } # disable-youtube-shorts
-      # { id = "lcdlignfoefnkcfejmlnegoobondbfjb"; } # Display youtube dislikes
-      # { id = "ndpmhjnlfkgfalaieeneneenijondgag"; } # YouTube Anti Translate
+      { id = "lcdlignfoefnkcfejmlnegoobondbfjb"; } # Display youtube dislikes
+      { id = "ndpmhjnlfkgfalaieeneneenijondgag"; } # YouTube Anti Translate
     ];
     #defaultSearchProviderEnabled = true;
     #defaultSearchProviderSearchURL = "https://startpage.com";

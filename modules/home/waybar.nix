@@ -1,11 +1,7 @@
 { config, pkgs, ... }:
 let
-  #neovim = pkgs.neovim;
 in
 {
-  #imports = [
-  #];
-
   programs.waybar = {
     enable = true;
     settings = [{

@@ -135,8 +135,5 @@
     ../modules/home/video_production.nix
     ../modules/home/waybar.nix
     ../modules/home/zsh.nix
-    # Server
-    # ../modules/server/audiobookshelf.nix
-    # ../modules/server/nextcloud.nix
   ];
 }

@@ -40,7 +40,7 @@
               {
                 nixpkgs.overlays = [ overlay-unstable ];
               }
-	      ./desktop/nixos/configuration.nix
+	      ./desktop_nvme/nixos/configuration.nix
 	    ];
 	  };
 	};

@@ -5,7 +5,7 @@ let
     withAACS = true;
     withBDplus = true;
   };
-  customFFMPEG = pkgs.ffmpeg.override { libbluray = libblurayAACS; };
+  customFFMPEG = pkgs.ffmpeg-full.override { libbluray = libblurayAACS; };
   customVLC = pkgs.vlc.override { libbluray-full = libblurayAACS; };
   # 2.9.3+ adds a fix for 1 track CD's, but it hasn't released yet
   abcdeOverlay = (final: prev: {

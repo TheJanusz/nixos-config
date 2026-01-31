@@ -1,11 +1,7 @@
 { config, pkgs, ... }:
 let
-  #neovim = pkgs.neovim;
 in
 {
-  #imports = [
-  #];
-
   environment.etc."nextcloud-admin-pass".text = "Testing123";
   services.nextcloud = {
     enable = false;

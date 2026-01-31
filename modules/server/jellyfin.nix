@@ -8,8 +8,5 @@ in
     enable = true;
     openFirewall = true;
   };
-  networking.hosts = {
-    "localhost:8096" = [ "jellyfin.local" ];
-  };
 }
 

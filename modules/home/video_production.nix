@@ -1,10 +1,10 @@
-{ config, pkgs, ... }:
+{ config, pkgs, pkgs-stable, ... }:
 let
 in
 {
   home.packages = with pkgs; [
     audacity
-    # kdePackages.kdenlive
+    pkgs-stable.kdePackages.kdenlive
     obs-studio
   ];
 }

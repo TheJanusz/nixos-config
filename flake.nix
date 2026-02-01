@@ -18,6 +18,7 @@
   outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, nixvim, ... }@inputs:
   let
     system = "x86_64-linux";
+    pkgs-stable = nixpkgs.legacyPackages.${system};
     overlay-unstable = final: prev: {
       unstable = import nixpkgs-unstable {
         inherit (final) system config;
@@ -31,7 +32,6 @@
     };
   in
   {
-        # repl = { inherit inputs; pkgs = import nixpkgs-unstable { system = "x86_64-linux"; }; };
         nixosConfigurations = {
           myNixos = nixpkgs.lib.nixosSystem {
             specialArgs = { inherit system; };
@@ -46,6 +46,8 @@
         };
         homeConfigurations."lord" = home-manager.lib.homeManagerConfiguration {
           inherit pkgs;
+
+          extraSpecialArgs = { inherit pkgs-stable; };
 
           # Specify your home configuration modules here, for example,
           # the path to your home.nix.

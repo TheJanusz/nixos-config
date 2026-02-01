@@ -6,9 +6,9 @@ in
   #imports = [
   #];
 
-  programs.brave = {
+  programs.chromium = {
     enable = true;
-    #package = pkgs.brave;
+    package = pkgs.brave;
     extensions = [
       { id = "hnmpcagpplmpfojmgmnngilcnanddlhb"; } # Windscribe
       { id = "nngceckbapebfimnlniiiahkandclblb"; } # Bitwarden

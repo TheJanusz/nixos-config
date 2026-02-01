@@ -131,7 +131,6 @@
     ../modules/home/hyprland.nix
     ../modules/home/nvim.nix
     ../modules/home/ripping.nix
-    ../modules/home/ruby.nix
     ../modules/home/video_production.nix
     ../modules/home/waybar.nix
     ../modules/home/zsh.nix

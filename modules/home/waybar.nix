@@ -11,16 +11,16 @@ in
       modules-center = [ "hyprland/window" ];
       modules-right = [
         "tray"
-	"network"
-	"backlight"
+	# "network"
+	# "backlight"
 	"pulseaudio"
-	"battery"
+	# "battery"
 	"clock"
       ];
-      network = {
-        format = "󰖩 {essid}";
-        format-disconnected = "󰖩 disconnected";
-      };
+      # network = {
+      #   format = "󰖩 {essid}";
+      #   format-disconnected = "󰖩 disconnected";
+      # };
     }];
   };
 }

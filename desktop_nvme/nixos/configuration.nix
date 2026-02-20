@@ -8,47 +8,14 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ../../modules/system/nvidia.nix
+      ../../modules/system/networking.nix
       ../../modules/system/options.nix
       # ../../modules/server/audiobookshelf.nix
       ../../modules/system/gaming.nix
       ../../modules/server/jellyfin.nix
       ../../modules/system/crypt.nix
     ];
-
-  multipleAllowedUnfreePredicate = [ "nvidia-x11" "nvidia-settings" "cuda-merged" "cuda_cuobjdump" "cuda_gdb" "cuda_nvcc" "cuda_nvdisasm" "cuda_nvprune" "cuda_cccl" "cuda_cudart" "cuda_cupti" "cuda_cuxxfilt" "cuda_nvml_dev" "cuda_nvrtc" "cuda_nvtx" "cuda_profiler_api" "cuda_sanitizer_api" "libcublas" "libcufft" "libcurand" "libcusolver" "libnvjitlink" "libcusparse" "libnpp" ];
-  services.xserver.videoDrivers = [ "nvidia" ];
-  hardware.graphics.enable = true;
-  hardware.keyboard.zsa.enable = true; 
-  hardware.nvidia = {
-
-    # Modesetting is required.
-    modesetting.enable = true;
-
-    # Nvidia power management. Experimental, and can cause sleep/suspend to fail.
-    # Enable this if you have graphical corruption issues or application crashes after waking
-    # up from sleep. This fixes it by saving the entire VRAM memory to /tmp/ instead 
-    # of just the bare essentials.
-    powerManagement.enable = false;
-
-    # Fine-grained power management. Turns off GPU when not in use.
-    # Experimental and only works on modern Nvidia GPUs (Turing or newer).
-    powerManagement.finegrained = false;
-
-    # Use the NVidia open source kernel module (not to be confused with the
-    # independent third-party "nouveau" open source driver).
-    # Support is limited to the Turing and later architectures. Full list of 
-    # supported GPUs is at: 
-    # https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus 
-    # Only available from driver 515.43.04+
-    open = true;
-
-    # Enable the Nvidia settings menu,
-	# accessible via `nvidia-settings`.
-    nvidiaSettings = true;
-
-    # Optionally, you may need to select the appropriate driver version for your specific GPU.
-    package = config.boot.kernelPackages.nvidiaPackages.stable; 
-  };
 
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
@@ -58,18 +25,12 @@
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
-  boot.kernelModules = [ "sg" ];
+  boot.kernelModules = [
+    "sg"
+    "dm_mod"
+  ];
 
   boot.initrd.luks.devices."luks-bc9d6cd6-bf0a-413c-be92-f4dad02b31aa".device = "/dev/disk/by-uuid/bc9d6cd6-bf0a-413c-be92-f4dad02b31aa";
-  # Enable networking
-  networking.hostName = "nixos"; # Define your hostname.
-  networking.networkmanager.enable = true;
-  networking.nameservers = [ "9.9.9.9" ];
-  # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
-
-  # Configure network proxy if necessary
-  # networking.proxy.default = "http://user:password@proxy:port/";
-  # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
 
   # Set your time zone.
   time.timeZone = "Europe/Warsaw";
@@ -89,28 +50,12 @@
     LC_TIME = "pl_PL.UTF-8";
   };
 
-  # Enable the X11 windowing system.
-  #services.xserver.enable = true;
-
-  # Enable the XFCE Desktop Environment.
-  #services.xserver.displayManager.lightdm.enable = true;
-  #services.xserver.desktopManager.xfce.enable = true;
-
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) config.multipleAllowedUnfreePredicate;
 
   nix.extraOptions = ''
     extra-substituters = https://devenv.cachix.org
     extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
   '';
-
-  # Enable the X11 windowing system.
-  # services.xserver.enable = true;
-
-  # Enable the XFCE Desktop Environment.
-  # services.xserver.displayManager.lightdm.enable = true;
-  # services.xserver.desktopManager.xfce.enable = true;
-
-  programs.yazi.enable = true;
 
   programs.hyprland = {
     enable = true;
@@ -156,11 +101,6 @@
     #media-session.enable = true;
   };
 
-  # Enable touchpad support (enabled default in most desktopManager).
-  # services.xserver.libinput.enable = true;
-
-  # Define a user account. Don't forget to set a password with ‘passwd’.
-  # programs.zsh.enable = true;
   users.users."lord" = {
     isNormalUser = true;
     description = "TheJanusz";
@@ -174,13 +114,9 @@
   # Install firefox.
   programs.firefox.enable = true;
 
-  # Allow unfree packages
-  # nixpkgs.config.allowUnfree = true;
-
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-    neovim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
     home-manager
     cifs-utils
     cudaPackages.cudatoolkit

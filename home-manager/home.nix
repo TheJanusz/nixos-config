@@ -21,9 +21,8 @@
       "megasync"
       "obsidian"
     ];
-  # nixpkgs.config.multipleAllowUnfreePredicate = [
-  #   "discord" "megasync" "obsidian"
-  # ];
+
+  programs.yazi.enable = true;
 
   # The home.packages option allows you to install Nix packages into your
   # environment.

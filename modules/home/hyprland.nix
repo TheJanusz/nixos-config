@@ -16,7 +16,6 @@ in
       "SUPER, W, killactive"
       "SUPER, M, exec, kitty -e btop"
       "SUPER, O, exec, obsidian"
-      "SUPER, N, exec, nvim"
       "SUPER, D, exec, discord"
       "SUPER, P, exec, bitwarden"
       "SUPER, R, exec, rofi -show run"
@@ -63,8 +62,8 @@ in
     };
     monitor = [
       "HDMI-A-2,3840x2160@60,-1920x0,2"
-      "DP-4, 2560x1440@120,0x0,1,transform,3"
-      "DP-3, 2560x1440@60,1440x0,1"
+      "DP-3, 2560x1440@120,1440x0,1"
+      "DP-4, 2560x1440@60,0x0,1,transform,3"
       "Unknown-1,disabled"
     ];
     decoration = {

@@ -13,6 +13,13 @@ in
   programs.nixvim = {
     enable = true;
 
+    keymaps = [
+      {
+        action = ":%s/^\\s*TRACK\\s\\+\\zs\\d\\+/\\=printf('%02d', str2nr(submatch(0)) + 1)/g<CR>";
+        key = "<leader>cueplus<CR>";
+        options = { silent = true; };
+      }
+    ];
     colorschemes.tokyonight.enable = true;
     opts = {
       number = true;

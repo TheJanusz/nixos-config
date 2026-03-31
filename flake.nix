@@ -32,50 +32,53 @@
     };
   in
   {
-        nixosConfigurations = {
-          myNixos = nixpkgs.lib.nixosSystem {
-            specialArgs = { inherit system; };
+    nixosConfigurations = {
+      myNixos = nixpkgs.lib.nixosSystem {
+        specialArgs = { inherit system; };
 
-            modules = [
-              {
-                nixpkgs.overlays = [ overlay-unstable ];
-              }
-              ./desktop_nvme/nixos/configuration.nix
-            ];
-          };
-        };
-        homeConfigurations."lord" = home-manager.lib.homeManagerConfiguration {
-          inherit pkgs;
+        modules = [
+          {
+            nix.package = pkgs.nixVersions.latest;
+            nixpkgs.overlays = [ overlay-unstable ];
+          }
+          ./desktop_nvme/nixos/configuration.nix
+        ];
+      };
+    };
 
-          extraSpecialArgs = { inherit pkgs-stable; };
+    homeConfigurations."lord" = home-manager.lib.homeManagerConfiguration {
+      inherit pkgs;
 
-          # Specify your home configuration modules here, for example,
-          # the path to your home.nix.
-          modules = [
-            ./home-manager/home.nix
-            nixvim.homeModules.nixvim
-          ];
+      extraSpecialArgs = { inherit pkgs-stable; };
 
-          # Optionally use extraSpecialArgs
-          # to pass through arguments to home.nix
-        };	
-        devShells.${system}.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            ruby_4_0
-            gcc
-            gnumake
-            pkg-config
-            zlib
-            openssl
-            libyaml
-            gmp
-            readline
-            rustc
-            fish
-          ];
-          nativeBuildInputs = [ pkgs.pkg-config ];
-          env = { SHELL = "${pkgs.fish}/bin/fish"; };
-          shellHook = ''
+      # Specify your home configuration modules here, for example,
+      # the path to your home.nix.
+      modules = [
+        ./home-manager/home.nix
+        nixvim.homeModules.nixvim
+      ];
+
+      # Optionally use extraSpecialArgs
+      # to pass through arguments to home.nix
+    };
+
+    devShells.${system}.default = pkgs.mkShell {
+      buildInputs = with pkgs; [
+        ruby_4_0
+        gcc
+        gnumake
+        pkg-config
+        zlib
+        openssl
+        libyaml
+        gmp
+        readline
+        rustc
+        fish
+      ];
+      nativeBuildInputs = [ pkgs.pkg-config ];
+      env = { SHELL = "${pkgs.fish}/bin/fish"; };
+      shellHook = ''
             exec fish -C '
             set -gx GEM_HOME $PWD/.gem
             set -gx PATH $GEM_HOME/bin $PATH
@@ -91,8 +94,8 @@
             echo "Ruby version: $(ruby --version)"
             echo "Rails version: $(rails --version)"
             '
-          '';
-        };
-      };
-    }
+      '';
+    };
+  };
+}
 

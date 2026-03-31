@@ -13,20 +13,36 @@
   # You should not change this value, even if you update Home Manager. If you do
   # want to update the value, then make sure to first check the Home Manager
   # release notes.
-  home.stateVersion = "24.11"; # Please read the comment before changing.
+  home.stateVersion = "25.11"; # Please read the comment before changing.
 
-  nixpkgs.config.allowUnfreePredicate = pkg:
-    builtins.elem (lib.getName pkg) [
-      "discord"
-      "megasync"
-      "obsidian"
-    ];
+  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
+    "discord"
+    "megasync"
+    "obsidian"
+    "makemkv"
+  ];
 
-  programs.yazi.enable = true;
+  programs.yazi = {
+    enable = true;
+    shellWrapperName = "y";
+    settings.yazi = {
+      opener.edit = [
+        { run = "nvim \"$@\""; block = true; }
+      ];
+    };
+  };
+
+  # Adding this explicitly for VLC to run some blu-ray menus
+  programs.java = {
+    enable = true;
+    package = pkgs.jdk11;
+  };
 
   # The home.packages option allows you to install Nix packages into your
   # environment.
   home.packages = with pkgs; [
+    (writeScriptBin "split-cue" (builtins.readFile ../bin/split.rb))
+    (writeScriptBin "shift-track-numbers" (builtins.readFile ../bin/shift-track-numbers.rb))
     bitwarden-desktop
 
     # Game dev
@@ -38,7 +54,7 @@
     clipse # clipboard TUI
     gtypist # typing practice
     # megasync
-    megacmd
+    # megacmd
     obsidian # Notetaking
     qownnotes # Alternative notetaking
     libreoffice-qt6-fresh
@@ -48,12 +64,15 @@
     devenv
     ollama
     freetube
+    ruby_4_0
     
     # testing
     gimp
     inkscape
+    rizin # decompilation / binary analysis
     # ares-cli # WebOS management
     libxml2 # Just for xmllint
+    zlib
     # mp3splt # Audio file splitting by .cue files. Useful for audiobooks. Not in unstable.
     #lgogdownloader
     #nerdfonts.override { fonts = [ "BigBlueTerminal" ]; }
@@ -94,6 +113,14 @@
     #   org.gradle.console=verbose
     #   org.gradle.daemon.idletimeout=3600000
     # '';
+    ".config/vlc/libaacs.so.0" = {
+      source = "${pkgs.makemkv}/lib/libmmbd.so.0";
+      onChange = ''
+        chmod 788 $out
+      '';
+    };
+    ".config/vlc/libbdplus.so.0".source = "${pkgs.makemkv}/lib/libmmbd.so.0";
+    ".config/vlc/libmmbd.so.0".source = "${pkgs.makemkv}/lib/libmmbd.so.0";
   };
 
   # Home Manager can also manage your environment variables through
@@ -114,6 +141,9 @@
   #
   home.sessionVariables = {
     EDITOR = "nvim";
+    LD_LIBRARY_PATH = lib.mkAfter "$HOME/.config/vlc";
+    LIBAACS_PATH = "$HOME/.config/vlc/libaacs.so.0";
+    LIBBDPLUS_PATH = "$HOME/.config/vlc/libbdplus.so.0";
   };
 
   # home.sessionPath = [

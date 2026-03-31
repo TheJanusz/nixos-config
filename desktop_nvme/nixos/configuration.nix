@@ -20,6 +20,7 @@
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
     download-buffer-size = 52428899;
+    trusted-users = [ "root" "lord" ];
   };
 
   # Bootloader.

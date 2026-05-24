@@ -2,23 +2,24 @@
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running ‘nixos-help’).
 
-{ config, lib, pkgs, ... }:
+{ inputs, config, lib, pkgs, ... }:
 
 {
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ../../modules/system/options.nix
       ../../modules/system/nvidia.nix
       ../../modules/system/networking.nix
-      ../../modules/system/options.nix
-      # ../../modules/server/audiobookshelf.nix
       ../../modules/system/gaming.nix
-      ../../modules/server/jellyfin.nix
       ../../modules/system/crypt.nix
+      ../../modules/server
     ];
 
+  gaming.enable = true;
+
   nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
+    experimental-features = [ "nix-command" "flakes" "pipe-operators" ];
     download-buffer-size = 52428899;
     trusted-users = [ "root" "lord" ];
   };
@@ -52,11 +53,16 @@
   };
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) config.multipleAllowedUnfreePredicate;
+  # services.self-signed-certs = {
+  #   enable = true;
+  #   domains = [ "jellyfin.local" "audiobookshelf.local" ];
+  # };
+  # security.pki.certificateFiles = [ "/etc/caddy-ca.crt" ];
 
-  nix.extraOptions = ''
-    extra-substituters = https://devenv.cachix.org
-    extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
-  '';
+  # nix.extraOptions = ''
+  #   extra-substituters = https://devenv.cachix.org
+  #   extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
+  # '';
 
   programs.hyprland = {
     enable = true;
@@ -121,6 +127,7 @@
     home-manager
     cifs-utils
     cudaPackages.cudatoolkit
+    inputs.agenix.packages.${pkgs.system}.default
   ];
 
   # Some programs need SUID wrappers, can be configured further or are
@@ -134,7 +141,7 @@
   # List services that you want to enable:
 
   # Enable the OpenSSH daemon.
-  # services.openssh.enable = true;
+  services.openssh.enable = true;
 
   # Open ports in the firewall.
   # networking.firewall.allowedTCPPorts = [ ... ];

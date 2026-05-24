@@ -53,7 +53,6 @@ in
       };
       comment.enable = true;
       emmet.enable = true;
-      git-conflict.enable = true;
       lualine.enable = true;
       mini-snippets = {
         enable = true;
@@ -78,11 +77,11 @@ in
 	  nixd.enable = true;
           ruby_lsp = {
             enable = true;
-            package = pkgs.rubyPackages_3_4.ruby-lsp;
+            package = pkgs.rubyPackages_4_0.ruby-lsp;
           };
           rubocop = {
             enable = true;
-            package = pkgs.rubyPackages_3_4.rubocop;
+            package = pkgs.rubyPackages_4_0.rubocop;
             cmd = ["bin/rubocop" "--lsp" "-c" ".rubocop.yml"];
           };
           # standardrb.enable = true;

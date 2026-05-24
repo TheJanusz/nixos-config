@@ -1,6 +1,5 @@
 { config, pkgs, ... }:
 let
-  #neovim = pkgs.neovim;
 in
 {
   home.packages = with pkgs; [
@@ -8,6 +7,7 @@ in
   ];
   programs.kitty.enable = true;
   wayland.windowManager.hyprland.enable = true;
+  wayland.windowManager.hyprland.configType = "hyprlang";
   wayland.windowManager.hyprland.settings = {
     bind = [
       "SUPER, F, exec, nautilus"

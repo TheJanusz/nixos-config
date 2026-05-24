@@ -64,7 +64,7 @@
     devenv
     ollama
     freetube
-    ruby_4_0
+    (ruby_4_0.withPackages (ps: with ps; [ taglib-ruby ]))
     
     # testing
     gimp

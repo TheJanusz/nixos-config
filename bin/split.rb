@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'rubycue'
+require 'taglib'
 
 module Bugfix
   refine RubyCue::Cuesheet do
@@ -52,5 +53,31 @@ system(cmd)
 
 # So after ffmpeg is done we need to do a second sweep to rename and apply metadata
 output_files = Dir.glob("output_*.mp3")
-puts cuesheet.songs.inspect
+raise "Chapter number mismatch. Cuesheet: #{cuesheet.songs.size}, Found files: #{output_files.size}" unless cuesheet.songs.size == output_files.size
+
+output_files.each_with_index do |file, index|
+  TagLib::MPEG::File.open(file) do |f|
+    tag = f.id3v2_tag
+    tag.artist = cuesheet.performer
+    tag.title = cuesheet.songs[index][:title]
+    tcom_frame = TagLib::ID3v2::TextIdentificationFrame.new('TCOM', TagLib::String::UTF8)
+    tcom_frame.text = cuesheet.songs.dig(index, :performer)
+    tag.add_frame(tcom_frame)
+    tag.track = index + 1
+
+    cover_filename = File.basename(cuesheet.file, ".*") + ".jpeg"
+    cover = File.open(cover_filename, 'rb') { it.read }
+    apic = TagLib::ID3v2::AttachedPictureFrame.new
+    apic.mime_type = 'image/jpeg' # TODO: Get this dynamically from the file itself maybe in case they change formats
+    apic.type = TagLib::ID3v2::AttachedPictureFrame::FrontCover
+    apic.description = "Cover"
+    apic.picture = cover
+    tag.add_frame(apic)
+    f.save
+
+    extension = File.extname(file)
+    new_filename = "#{cuesheet.songs.dig(index, :title)}.#{extension}"
+    File.rename(file, new_filename)
+  end
+end
 # end

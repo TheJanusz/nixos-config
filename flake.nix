@@ -1,8 +1,8 @@
 {
-  description = "System configuration fot the Asus TUF F16 laptop";
+  description = "System configuration fot the be_quiet! desktop";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -13,9 +13,10 @@
       url = "github:nix-community/nixvim";
       #inputs.nixpkgs.follows = "nixpkgs";
     };
+    agenix.url = "github:ryantm/agenix";
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, nixvim, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, nixvim, agenix, ... }@inputs:
   let
     system = "x86_64-linux";
     pkgs-stable = nixpkgs.legacyPackages.${system};
@@ -42,7 +43,9 @@
             nixpkgs.overlays = [ overlay-unstable ];
           }
           ./desktop_nvme/nixos/configuration.nix
+          agenix.nixosModules.default
         ];
+        specialArgs = { inherit inputs; };
       };
     };
 
@@ -62,40 +65,40 @@
       # to pass through arguments to home.nix
     };
 
-    devShells.${system}.default = pkgs.mkShell {
-      buildInputs = with pkgs; [
-        ruby_4_0
-        gcc
-        gnumake
-        pkg-config
-        zlib
-        openssl
-        libyaml
-        gmp
-        readline
-        rustc
-        fish
-      ];
-      nativeBuildInputs = [ pkgs.pkg-config ];
-      env = { SHELL = "${pkgs.fish}/bin/fish"; };
-      shellHook = ''
-            exec fish -C '
-            set -gx GEM_HOME $PWD/.gem
-            set -gx PATH $GEM_HOME/bin $PATH
-            bundle config set path $GEM_HOME
-            if not type -q rails
-            echo "Rails not found. Installing Rails..."
-            gem install rails
-            end
-            if not test -d "$GEM_HOME/gems"
-            echo "Installing Ruby gems..."
-            bundle install
-            end
-            echo "Ruby version: $(ruby --version)"
-            echo "Rails version: $(rails --version)"
-            '
-      '';
-    };
+    # devShells.${system}.default = pkgs.mkShell {
+    #   buildInputs = with pkgs; [
+    #     ruby_4_0
+    #     gcc
+    #     gnumake
+    #     pkg-config
+    #     zlib
+    #     openssl
+    #     libyaml
+    #     gmp
+    #     readline
+    #     rustc
+    #     fish
+    #   ];
+    #   nativeBuildInputs = [ pkgs.pkg-config ];
+    #   env = { SHELL = "${pkgs.fish}/bin/fish"; };
+    #   shellHook = ''
+    #         exec fish -C '
+    #         set -gx GEM_HOME $PWD/.gem
+    #         set -gx PATH $GEM_HOME/bin $PATH
+    #         bundle config set path $GEM_HOME
+    #         if not type -q rails
+    #         echo "Rails not found. Installing Rails..."
+    #         gem install rails
+    #         end
+    #         if not test -d "$GEM_HOME/gems"
+    #         echo "Installing Ruby gems..."
+    #         bundle install
+    #         end
+    #         echo "Ruby version: $(ruby --version)"
+    #         echo "Rails version: $(rails --version)"
+    #         '
+    #   '';
+    # };
   };
 }
 

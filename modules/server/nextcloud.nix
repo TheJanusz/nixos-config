@@ -12,8 +12,8 @@ in
       config.adminpassFile = "/etc/nextcloud-admin-pass";
       config.dbtype = "sqlite";
     # https = false;
-    settings.trusted_domains = [ "0.0.0.0" "192.168.254.*" "127.0.0.1" "localhost" "nextcloud.local" ];
-    # settings.overwriteprotocol = "http";
+    settings.trusted_domains = [ "0.0.0.0" "192.168.254.*" "127.0.0.1" "localhost" "nextcloud.internal" ];
+    settings.overwriteprotocol = "http";
   };
 
   services.nginx.virtualHosts."${config.services.nextcloud.hostName}" = {

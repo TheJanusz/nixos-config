@@ -20,6 +20,7 @@ in
     };
 
     imports = [
+      ./authentik.nix
       ./audiobookshelf.nix
       ./jellyfin.nix
       ./nextcloud.nix

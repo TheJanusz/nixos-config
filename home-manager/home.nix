@@ -43,7 +43,7 @@
   home.packages = with pkgs; [
     (writeScriptBin "split-cue" (builtins.readFile ../bin/split.rb))
     (writeScriptBin "shift-track-numbers" (builtins.readFile ../bin/shift-track-numbers.rb))
-    bitwarden-desktop
+    # bitwarden-desktop
 
     # Game dev
     blender

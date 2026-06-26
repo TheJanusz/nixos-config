@@ -8,6 +8,7 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      # ../../secrets/secrets.nix
       ../../modules/system/options.nix
       ../../modules/system/nvidia.nix
       ../../modules/system/networking.nix
@@ -119,12 +120,13 @@
   };
 
   # Install firefox.
-  programs.firefox.enable = true;
+  # programs.firefox.enable = true;
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     home-manager
+    openblas
     cifs-utils
     cudaPackages.cudatoolkit
     inputs.agenix.packages.${pkgs.system}.default

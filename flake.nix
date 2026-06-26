@@ -14,9 +14,10 @@
       #inputs.nixpkgs.follows = "nixpkgs";
     };
     agenix.url = "github:ryantm/agenix";
+    authentik-nix.url = "github:nix-community/authentik-nix";
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, nixvim, agenix, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, nixvim, agenix, authentik-nix, ... }@inputs:
   let
     system = "x86_64-linux";
     pkgs-stable = nixpkgs.legacyPackages.${system};
@@ -24,6 +25,11 @@
       unstable = import nixpkgs-unstable {
         inherit (final) system config;
       };
+    };
+    openblas-fix = final: prev: {
+      openblas = prev.openblas.overrideAttrs (oldAttrs: {
+        doCheck = false;
+      });
     };
     pkgs = import nixpkgs-unstable {
       inherit system;
@@ -40,8 +46,9 @@
         modules = [
           {
             nix.package = pkgs.nixVersions.latest;
-            nixpkgs.overlays = [ overlay-unstable ];
+            nixpkgs.overlays = [ overlay-unstable openblas-fix ];
           }
+          authentik-nix.nixosModules.default
           ./desktop_nvme/nixos/configuration.nix
           agenix.nixosModules.default
         ];

@@ -11,9 +11,13 @@ in
         "steam-unwrapped"
       ];
 
+      boot.kernel.sysctl = {
+        "kernel.unpriviliged_userns_clone" = true;
+      };
+
       programs.gamescope = {
         enable = true;
-        capSysNice = true;
+        capSysNice = false;
       };
       programs.steam = {
         enable = true;
@@ -26,7 +30,7 @@ in
 
       environment.systemPackages = with pkgs; [
         unstable.heroic
-        lutris
+        unstable.lutris
       ];
     };
   }

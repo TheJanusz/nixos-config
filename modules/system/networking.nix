@@ -5,15 +5,17 @@ in
 {
   age.secrets.wg-privatekey = {
     file = ../../secrets/wg-privatekey.age;
-    owner = "root";
-    group = "root";
-    mode = "0400";
+    owner = "systemd-network";
+    group = "systemd-network";
+    mode = "640";
   };
+  age.secrets.wg-peers.file = ../../secrets/wg-peers.conf.age;
 
   # Enable networking
   networking.hostName = "nixos"; # Define your hostname.
   networking.networkmanager.enable = true;
-  networking.nameservers = [ "9.9.9.9" ];
+  networking.useNetworkd = true;
+  networking.nameservers = [ "127.0.0.1" "9.9.9.9" ];
   networking.firewall.allowedTCPPorts = [ 80 443 ];
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
@@ -30,25 +32,64 @@ in
       interface = "wg0";
       protocol = "tcp";
       destinationPort = 8096;
-      actuon = "accept";
+      action = "accept";
     }
   ];
-  networking.wireguard.interfaces.wg0 = {
-    ips = [ "10.100.0.1/24" ];
-    listenPort = 51820;
-    privateKeyFile = config.age.secrets.wg-privatekey.path;
 
-    peers = [
-      {
-        publicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
-        allowedIPs = [ "10.100.0.1/32" ];
-      }
-      {
-        publicKey = "JVFZWH+N7bpc8176K8XvaUoJ7geYafzvS2gmQE5A8y4=";
-        allowedIPs = [ "10.100.0.50/32" ];
-      }
-    ];
+  systemd.network = {
+    enable = true;
+
+    netdevs."50-wg0" = {
+      netdevConfig = {
+        Kind = "wireguard";
+        Name = "wg0";
+      };
+
+      wireguardConfig = {
+        ListenPort = 51820;
+        PrivateKeyFile = config.age.secrets.wg-privatekey.path;
+        FirewallMark = 42; # Marks packets for policy routing
+      };
+
+      wireguardPeers = [
+        {
+          PublicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
+          AllowedIPs = [ "10.100.0.1/32" ];
+        }
+        {
+          PublicKey = "JVFZWH+N7bpc8176K8XvaUoJ7geYafzvS2gmQE5A8y4=";
+          AllowedIPs = [ "10.100.0.2/32" ];
+        }
+        {
+          PublicKey = "95NL8dz+xDNUgmiW6Oc9rMfFguBu9LuiUnDukkFCq2M=";
+          AllowedIPs = [ "10.100.0.3/32" ];
+        }
+        {
+          PublicKey = "pA2hyTfIGACpDVh23xpP8+9xVzeCJSy7aCaoYqjqnVU=";
+          AllowedIPs = [ "10.100.0.4/32" ];
+        }
+        {
+          PublicKey = "Q8F6OyfCIh0IP5l3OrdCEYrvlXMw2SP1gJKoks6klHE=";
+          AllowedIPs = [ "10.100.0.5/32" ];
+        }
+      ];
+      # let
+      #   tomlData = fromTOML (builtins.readFile config.age.secrets.wg-peers.path);
+      #   peersData = tomlData.peers or [];
+      # in
+      # map (peer: {
+      #   PublicKey = peer.publicKey;
+      #   AllowedIPs = peer.allowedIPs;
+      # }) peersData;
+
+    };
+
+    networks."50-wg0" = {
+      matchConfig.Name = "wg0";
+      address = [ "10.100.0.1/24" ];
+    };
   };
+
   networking.nat = {
     enable = true;
     externalInterface = "enp7s0";

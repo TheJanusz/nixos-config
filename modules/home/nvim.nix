@@ -84,7 +84,7 @@ in
             package = pkgs.rubyPackages_4_0.rubocop;
             cmd = ["bin/rubocop" "--lsp" "-c" ".rubocop.yml"];
           };
-          # standardrb.enable = true;
+          standardrb.enable = true;
           tailwindcss.enable = true;
         };
         keymaps = {

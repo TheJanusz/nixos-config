@@ -14,10 +14,14 @@
       ../../modules/system/networking.nix
       ../../modules/system/gaming.nix
       ../../modules/system/crypt.nix
-      ../../modules/server
+      # ../../modules/server
     ];
 
   gaming.enable = true;
+  services.collabora-online = {
+    enable = true;
+    port = 9980;
+  };
 
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" "pipe-operators" ];
@@ -54,16 +58,6 @@
   };
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) config.multipleAllowedUnfreePredicate;
-  # services.self-signed-certs = {
-  #   enable = true;
-  #   domains = [ "jellyfin.local" "audiobookshelf.local" ];
-  # };
-  # security.pki.certificateFiles = [ "/etc/caddy-ca.crt" ];
-
-  # nix.extraOptions = ''
-  #   extra-substituters = https://devenv.cachix.org
-  #   extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
-  # '';
 
   programs.hyprland = {
     enable = true;
@@ -115,8 +109,6 @@
     extraGroups = [ "networkmanager" "wheel" ];
     shell = pkgs.zsh;
     ignoreShellProgramCheck = true;
-    # packages = with pkgs; [
-    # ];
   };
 
   # Install firefox.

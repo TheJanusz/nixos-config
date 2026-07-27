@@ -3,18 +3,19 @@
 require 'rubycue'
 require 'taglib'
 
+# This monkey-patches the (very old) rubycue library to handle track/index numbers that are 3 digits
+# There is a bug upstream that only accepts up to 2 digits
 module Bugfix
   refine RubyCue::Cuesheet do
-
-    def initialize(cuesheet, track_duration=nil)
+    def initialize(cuesheet, track_duration = nil)
       @cuesheet = cuesheet
       @reg = {
-        :track => %r(TRACK (\d{1,3}) AUDIO),
-        :performer => %r(PERFORMER "(.*)"),
-        :title => %r(TITLE "(.*)"),
-        :index => %r(INDEX \d{1,3} (\d{1,4}):(\d{1,2}):(\d{1,2})),
-        :file => %r(FILE "(.*)"),
-        :genre => %r(REM GENRE (.*)\b)
+        track: %r{TRACK (\d{1,3}) AUDIO},
+        performer: %r{PERFORMER "(.*)"},
+        title: %r{TITLE "(.*)"},
+        index: %r{INDEX \d{1,3} (\d{1,4}):(\d{1,2}):(\d{1,2})},
+        file: %r{FILE "(.*)"},
+        genre: %r{REM GENRE (.*)\b}
       }
       @track_duration = RubyCue::Index.new(track_duration) if track_duration
     end
@@ -31,16 +32,8 @@ audio_file = cuesheet.file
 raise "Audio file not found" unless File.exist?(audio_file)
 
 # Process tracks
-# cuesheet.songs.each_with_index do |song, i|
-# start_time = song[:index].to_f
-# next_start = cuesheet.songs[i + 1][:index].to_f rescue nil
+# The first one has start_time 00:00:00 so not necessary for splitting
 start_times = cuesheet.songs[1..].map { it[:index].to_f }
-
-# track_num = song[:track].to_s.rjust(2, '0')
-# title = song[:title] || 'Unknown Title'
-# performer = song[:performer] || 'Unknown Performer'
-
-# output_file = "#{track_num} - #{title}.mp3"
 
 cmd = "ffmpeg -i \"#{audio_file}\""
 cmd += " -f segment -segment_times \"#{start_times.join(',')}\""
@@ -58,11 +51,14 @@ raise "Chapter number mismatch. Cuesheet: #{cuesheet.songs.size}, Found files: #
 output_files.each_with_index do |file, index|
   TagLib::MPEG::File.open(file) do |f|
     tag = f.id3v2_tag
-    tag.artist = cuesheet.performer
+    tag.artist = cuesheet.performer # Audiobookshelf takes author from this
     tag.title = cuesheet.songs[index][:title]
     tcom_frame = TagLib::ID3v2::TextIdentificationFrame.new('TCOM', TagLib::String::UTF8)
-    tcom_frame.text = cuesheet.songs.dig(index, :performer)
+    tcom_frame.text = cuesheet.songs.dig(index, :performer) # Audiobookshelf takes the narrator from this
     tag.add_frame(tcom_frame)
+
+    # Track numbers in cue might be mangled from editing (they don't always contain regular list of chapters)
+    # Could make sure this is correct when editing, but it's safer to just take the index and do it programatically
     tag.track = index + 1
 
     cover_filename = File.basename(cuesheet.file, ".*") + ".jpeg"
@@ -76,8 +72,7 @@ output_files.each_with_index do |file, index|
     f.save
 
     extension = File.extname(file)
-    new_filename = "#{cuesheet.songs.dig(index, :title)}.#{extension}"
+    new_filename = "#{cuesheet.songs.dig(index, :title)}#{extension}"
     File.rename(file, new_filename)
   end
 end
-# end

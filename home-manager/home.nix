@@ -32,6 +32,11 @@
     };
   };
 
+  programs.devenv = {
+    enable = true;
+    enableZshIntegration = true;
+  };
+
   # Adding this explicitly for VLC to run some blu-ray menus
   programs.java = {
     enable = true;

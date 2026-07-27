@@ -22,10 +22,10 @@ in
     #defaultSearchProviderSearchURL = "https://startpage.com";
   };
 
-  programs.firefox = {
-    enable = true;
-    package = pkgs.firefox-devedition;
-    configPath = "${config.xdg.configHome}/.config/mozilla/firefox";
-  };
+  # programs.firefox = {
+  #   enable = true;
+  #   package = pkgs.firefox-devedition;
+  #   configPath = "${config.xdg.configHome}/.config/mozilla/firefox";
+  # };
 }
 

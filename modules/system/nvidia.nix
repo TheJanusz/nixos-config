@@ -7,6 +7,9 @@ in
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.graphics.enable = true;
   hardware.keyboard.zsa.enable = true; 
+  hardware.graphics.extraPackages = with pkgs; [
+    nvidia-vaapi-driver
+  ];
   hardware.nvidia = {
 
     # Modesetting is required.
@@ -36,6 +39,15 @@ in
 
     # Optionally, you may need to select the appropriate driver version for your specific GPU.
     package = config.boot.kernelPackages.nvidiaPackages.stable; 
+  };
+  environment.systemPackages = with pkgs; [
+    libva
+    libva-utils
+  ];
+
+  environment.sessionVariables = {
+    LIBVA_DRIVER_NAME = "nvidia";
+    NVD_BACKEND = "direct";
   };
 }
 

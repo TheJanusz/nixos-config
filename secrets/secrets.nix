@@ -12,5 +12,5 @@ in {
   "wildcard.internal.crt.age".publicKeys = [ user1 system1 homelab ];
   "wildcard.internal.key.age".publicKeys = [ user1 system1 homelab ];
   "wg-peers.conf.age".publicKeys = [ user1 system1 homelab ];
-  "wg-client-privatekey.age".publicKeys = [ user1 system1 ];
+  "wg-client-privatekey.age".publicKeys = [ user1 system1 homelab ];
 }

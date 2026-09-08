@@ -17,9 +17,12 @@
 
   nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
     "discord"
+    "discord-unwrapped"
     "megasync"
     "obsidian"
     "makemkv"
+    "cursor-cli"
+    "cuda_cccl" "cuda_cudart" "cuda_cupti" "cuda_cuxxfilt" "cuda_nvml_dev" "cuda_nvrtc" "cuda_nvtx" "cuda_profiler_api" "cuda_sanitizer_api" "cuda-merged" "cuda_cuobjdump" "cuda_gdb" "cuda_nvcc" "cuda_nvdisasm" "cuda_nvprune" "libcublas" "libcufft" "libcurand" "libcusolver" "libnvjitlink" "libcusparse" "libnpp"
   ];
 
   programs.yazi = {
@@ -54,6 +57,9 @@
     blender
     godot
 
+    # AI
+    cursor-cli
+
     nautilus # file manager
     btop # system monitoring TUI
     clipse # clipboard TUI
@@ -65,7 +71,7 @@
     libreoffice-qt6-fresh
     nextcloud-client
     rofi # application launcher
-    subtitleedit
+    # subtitleedit # Removed because it relies on gtk2
     devenv
     ollama
     freetube
@@ -165,8 +171,10 @@
     ../modules/home/hyprland.nix
     ../modules/home/nvim.nix
     ../modules/home/ripping.nix
+    ../modules/home/subtitling.nix
     ../modules/home/video_production.nix
     ../modules/home/waybar.nix
     ../modules/home/zsh.nix
+    ../modules/home/ai.nix
   ];
 }

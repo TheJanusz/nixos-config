@@ -18,10 +18,10 @@
     ];
 
   gaming.enable = true;
-  services.collabora-online = {
-    enable = true;
-    port = 9980;
-  };
+  # services.collabora-online = {
+  #   enable = true;
+  #   port = 9980;
+  # };
 
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" "pipe-operators" ];

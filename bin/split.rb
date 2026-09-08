@@ -73,6 +73,7 @@ output_files.each_with_index do |file, index|
 
     extension = File.extname(file)
     new_filename = "#{cuesheet.songs.dig(index, :title)}#{extension}"
-    File.rename(file, new_filename)
+    safe_name = new_filename.gsub(/[\/\\:*?"<>|]/, "_")
+    File.rename(file, safe_name)
   end
 end

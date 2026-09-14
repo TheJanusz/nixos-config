@@ -14,6 +14,11 @@
       ../../modules/server
     ];
 
+  # After creating secrets/fluxer-env.age (see modules/server/fluxer.env.example):
+  # server.fluxer.enable = true;
+  # server.fluxer.uploadsDir = "/data/fluxer/uploads";
+  # server.fluxer.backupDir = "/data/fluxer/backups";
+
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" "pipe-operators" ];
     download-buffer-size = 52428899;
@@ -135,6 +140,12 @@
   services.openssh = {
     enable = true;
     settings.AllowUsers = [ "lord" ];
+  };
+
+  server.fluxer = {
+    enable = true;
+    uploadsDir = "/data/binary/fluxer";
+    backupDir = "/data/backups/fluxer";
   };
 
   # Open ports in the firewall.

@@ -15,15 +15,27 @@
   # release notes.
   home.stateVersion = "25.11"; # Please read the comment before changing.
 
-  nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
-    "discord"
-    "discord-unwrapped"
-    "megasync"
-    "obsidian"
-    "makemkv"
-    "cursor-cli"
-    "cuda_cccl" "cuda_cudart" "cuda_cupti" "cuda_cuxxfilt" "cuda_nvml_dev" "cuda_nvrtc" "cuda_nvtx" "cuda_profiler_api" "cuda_sanitizer_api" "cuda-merged" "cuda_cuobjdump" "cuda_gdb" "cuda_nvcc" "cuda_nvdisasm" "cuda_nvprune" "libcublas" "libcufft" "libcurand" "libcusolver" "libnvjitlink" "libcusparse" "libnpp"
-  ];
+  nixpkgs.config.allowUnfreePredicate = pkg:
+    let
+      name = lib.getName pkg;
+    in
+    builtins.elem name [
+      "discord"
+      "discord-unwrapped"
+      "megasync"
+      "obsidian"
+      "makemkv"
+      "cursor-cli"
+      "nvidia-x11"
+      "nvidia-settings"
+      "cudatoolkit"
+      "cudnn"
+      "nccl"
+    ]
+    || lib.hasPrefix "cuda" name
+    || lib.hasPrefix "libcu" name
+    || lib.hasPrefix "libnv" name
+    || lib.hasPrefix "cudnn" name;
 
   programs.yazi = {
     enable = true;
@@ -163,6 +175,9 @@
 
   # Let Home Manager install and manage itself.
   programs.home-manager.enable = true;
+
+  # Subpipe + Bielik/CUDA deps; leave false on hosts that should not pull them.
+  subtitling.enable = true;
 
   imports = [
     ../modules/home/browser.nix

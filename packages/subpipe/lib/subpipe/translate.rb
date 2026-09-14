@@ -9,9 +9,11 @@ require "socket"
 require "net/http"
 require "uri"
 require "timeout"
+require "set"
 require_relative "ass"
 require_relative "vocab"
 require_relative "metrics"
+require_relative "feedback"
 
 module Subpipe
   # EN→PL draft via llama-server (keep-alive) + optional cue batches.
@@ -20,31 +22,45 @@ module Subpipe
     module_function
 
     SYSTEM_PROMPT = <<~PROMPT.freeze
-      You translate English video subtitles into natural, spoken Polish for on-screen text and voice-over (lektor).
+      You translate English video subtitles into Polish that is BOTH the on-screen
+      subtitle and the TV-lektor narration (same text_pl for both; same punctuation).
 
       Goals, in order:
-      1. Clear meaning and tone a Polish viewer would actually say.
-      2. Idiomatic Polish — prefer natural phrasing over word-for-word calques.
+      1. Clear meaning and tone a Polish viewer would actually say aloud.
+      2. Idiomatic, concise, flowing Polish — prefer natural rephrase over calques.
       3. Fit the cue's timing: if duration is short or the English is dense, compress —
          convey the sense in a shorter sentence; do not translate every word.
       4. Respect the glossary and proper nouns.
+      5. Shape for Orpheus TTS / warm TV lektor: slight emotion from tags — not dry
+         documentary, not stage acting. Prefer shorter breath groups over long run-ons.
 
       Glossary rules:
-      - If preferred_translations (a list) is given, pick exactly one of those Polish forms
-        for that English term — best fit for this cue; do not invent another form.
-      - If a single preferred_translation is given, you MUST use it for that English term.
+      - If preferred_translations (a list) is given, pick exactly one of those Polish
+        lemmas/canonical forms for that English term — best fit for this cue; do not
+        invent a synonym or different wording.
+        Each list item is one alternative (e.g. ["samochód","auto"]), never paste the whole list.
+      - You MAY inflect that chosen form for Polish case/number/gender so the sentence is
+        grammatical (e.g. lemma "Fani Czterech Kółek" → "w Fanach Czterech Kółek").
+      - If a single preferred_translation is given, you MUST use that lemma (inflected as needed),
+        not a different translation of the English term.
       - If avoid_pl is given, never use those Polish words for that term.
       - keep_english terms stay in English in the Polish line.
+      - Honour glossary notes (e.g. grammatical gender: Syrena → rzadka, not rzadki;
+        show references: EN "on/in Title" → natural PL framing, often "w" + locative,
+        not a calque "na" + nominative).
+      - For TV/show titles used as the setting ("on Wheeler Dealers", "in the show"),
+        prefer idiomatic Polish (typically "w" + declined title), not word-for-word "na …".
 
-      Style:
-      - Sound like dialogue/narration, not a dictionary gloss.
-      - Keep roughly subtitle-friendly length when timing allows; when the cue's
-        duration_ms (or prosody.duration_ms) is tight relative to the English,
-        prioritize brevity and sense over completeness.
-      - Drop filler and redundant clauses if needed to stay speakable at a natural pace.
+      Style / direction (keep these marks in text_pl — they appear on screen too):
+      - Use … and — for natural pauses/breaths when emotion or delivery needs them.
+      - Match intensity: low → subtle punctuation; high → clearer pauses.
+      - delivery: whisper → softer/shorter; shout → punchier; rushed → tighter;
+        slow → more … / —; laugh/cry → light rhythm, still narratable aloud.
       - When emotion / emotion_intensity / delivery are present, gently reflect them
         in wording and register — do not exaggerate or add stage directions.
         Examples: angry → sharper; amused → lighter; whisper → softer; shout → blunt/short.
+      - No SSML, markdown, English tags like <laugh>, stage directions, or wrapping quotes.
+      - Drop filler and redundant clauses if needed to stay speakable at a natural pace.
 
       Also flag specialized language in the English cue for human review:
       - names: people, places, brands, model names, titles
@@ -53,7 +69,7 @@ module Subpipe
 
       You will receive a JSON object with a "cues" array (1 or more items).
       Reply with ONLY a JSON array with one object per cue, same ids, same order:
-      [{"id":"<cue id>","text_pl":"<Polish subtitle>","names":[],"jargon":[],"keep_english":[]}]
+      [{"id":"<cue id>","text_pl":"<Polish for subtitle and lektor>","names":[],"jargon":[],"keep_english":[]}]
       Arrays may be empty. No markdown, no commentary.
     PROMPT
 
@@ -107,10 +123,11 @@ module Subpipe
       end
     end
 
-    def generate_draft(out_dir, force: false, model: nil, llama_bin: nil, vocab_path: nil)
+    def generate_draft(out_dir, force: false, model: nil, llama_bin: nil, vocab_path: nil, only_ids: nil)
       t0 = Metrics.monotonic
       context = load_context!(out_dir)
       cues = context.fetch("cues")
+      only_set = only_ids && Array(only_ids).map(&:to_s).reject(&:empty?).uniq.to_set
       video_path = context.dig("source", "path")
       stem = Subpipe.source_stem(context["source"] || {})
       start_dir = if video_path && File.directory?(File.dirname(video_path))
@@ -137,6 +154,7 @@ module Subpipe
       context["assets"].merge!(vocab_meta)
       File.write(File.join(out_dir, "context.json"), JSON.pretty_generate(context))
       warn "Vocab files: #{vocab_files.join(', ')}" unless vocab_files.empty?
+      warn "Retranslating cue ids: #{only_set.to_a.join(', ')}" if only_set
 
       batch_size = ENV.fetch("SUBPIPE_TRANSLATE_BATCH", DEFAULT_BATCH.to_s).to_i
       batch_size = DEFAULT_BATCH if batch_size < 1
@@ -190,7 +208,24 @@ module Subpipe
 
         cues.each_with_index do |cue, idx|
           existing = cue["text_pl"].to_s.strip
-          if !force && !existing.empty?
+          in_only = only_set.nil? || only_set.include?(cue["id"].to_s)
+
+          if only_set && !in_only
+            flush.call
+            flags = normalize_flags(
+              names: cue["review_names"],
+              jargon: cue["review_jargon"],
+              keep_english: cue["review_keep_english"],
+              cue: cue,
+              glossary: glossary
+            )
+            translations << entry_for(cue, existing, flags, skipped: true)
+            translated_pl[cue["id"].to_s] = existing
+            skipped += 1
+            next
+          end
+
+          if !force && only_set.nil? && !existing.empty?
             flush.call
             flags = normalize_flags(
               names: cue["review_names"],
@@ -232,7 +267,9 @@ module Subpipe
             cue: cue,
             prev: prev_cue,
             nxt: next_cue,
-            glossary: glossary_for_cue(cue, glossary)
+            glossary: glossary_for_cue(cue, glossary),
+            few_shot: few_shot_examples(out_dir, cue, context),
+            speaker_profile: speaker_profile_for(out_dir, cue, context)
           }
           flush.call if pending.size >= batch_size
         end
@@ -397,6 +434,14 @@ module Subpipe
       end
     end
 
+    def gpu_mem_snapshot
+      out, = Open3.capture2("nvidia-smi", "--query-gpu=memory.free,memory.used,memory.total", "--format=csv,noheader,nounits")
+      free, used, total = out.to_s.strip.split(",").map { |x| x.to_s.strip.to_i }
+      { "free_mib" => free, "used_mib" => used, "total_mib" => total }
+    rescue StandardError => e
+      { "error" => e.message }
+    end
+
     def start_server!(model:, server_bin:)
       bin = ENV["SUBPIPE_LLAMA_SERVER_BIN"].to_s.strip
       bin = server_bin.to_s.strip if bin.empty? && server_bin && !server_bin.to_s.include?("llama-cli")
@@ -405,17 +450,25 @@ module Subpipe
       host = "127.0.0.1"
       ngl = ENV.fetch("SUBPIPE_LLAMA_NGL", "99")
       log_path = File.join(Dir.tmpdir, "subpipe-llama-server-#{Process.pid}-#{port}.log")
-      ctx = ENV.fetch("SUBPIPE_TRANSLATE_CTX", "8192")
+      # 8192×4 slots blew KV (~1.6GiB) after weights on 10GiB cards; one slot + 4k is enough for batches.
+      ctx = ENV.fetch("SUBPIPE_TRANSLATE_CTX", "4096")
+      parallel = ENV.fetch("SUBPIPE_TRANSLATE_PARALLEL", "1")
+      # Keep server stderr in log_path so OOM/load errors surface on abort.
       cmd = [
         bin,
         "-m", model,
         "--host", host,
         "--port", port.to_s,
         "-c", ctx,
+        "-np", parallel,
         "-n", "1024",
-        "-ngl", ngl,
-        "--log-disable"
+        "-ngl", ngl
       ]
+      snap = gpu_mem_snapshot
+      free = snap.is_a?(Hash) ? snap["free_mib"].to_i : 0
+      if free.positive? && free < 6500 && ngl.to_i >= 50
+        warn "Warning: only ~#{free} MiB GPU free; Bielik Q4 typically needs ~6.5 GiB. Close other GPU apps or expect CUDA OOM."
+      end
       warn "Starting #{bin} on #{host}:#{port} (#{File.basename(model)}) …"
       pid = spawn(*cmd, out: log_path, err: log_path)
       server = { pid: pid, host: host, port: port, base_url: "http://#{host}:#{port}", log_path: log_path }
@@ -430,8 +483,18 @@ module Subpipe
       models = URI("#{server[:base_url]}/v1/models")
       loop do
         begin
-          if Process.waitpid(server[:pid], Process::WNOHANG)
-            Subpipe.abort!("llama-server exited before ready\n#{read_server_log(server)}")
+          status = Process.waitpid(server[:pid], Process::WNOHANG)
+          if status
+            log_tail = read_server_log(server)
+            snap = gpu_mem_snapshot
+            hint = ""
+            if log_tail.match?(/out of memory|cudaMalloc|failed to allocate CUDA|unable to allocate CUDA/i)
+              free = snap.is_a?(Hash) ? snap["free_mib"] : nil
+              hint = "\nHint: GPU out of memory"
+              hint += " (only ~#{free} MiB free)" if free
+              hint += ". Close other GPU apps (games/Proton/etc.), then retry. Bielik Q4 needs ~6.5 GiB free with default -ngl 99."
+            end
+            Subpipe.abort!("llama-server exited before ready#{hint}\n#{log_tail}")
           end
         rescue Errno::ECHILD
           Subpipe.abort!("llama-server process missing")
@@ -459,7 +522,9 @@ module Subpipe
       path = server && server[:log_path]
       return "" if path.nil? || !File.file?(path)
 
-      File.read(path).to_s[-2000, 2000].to_s
+      text = File.read(path).to_s
+      # Ruby str[-N,N] is nil when length < N — do not use that form.
+      text.length > 2000 ? text[-2000..] : text
     rescue StandardError
       ""
     end
@@ -495,12 +560,38 @@ module Subpipe
       nil
     end
 
-    def chat_complete(http, base_uri, user_prompt, max_tokens: 512)
+    # One-shot chat for mentor edit-reflection (starts/stops llama-server).
+    # Returns content string, or nil if model missing / SUBPIPE_REFLECT=0 / failure (non-abort).
+    def one_shot_chat(user_prompt, system: nil, max_tokens: 384, model: nil, server_bin: nil)
+      return nil if ENV["SUBPIPE_REFLECT"].to_s == "0"
+      return nil if ENV["SUBPIPE_TRANSLATE_HOOK"].to_s.strip != "" # hook mode: skip server reflect
+
+      model ||= ENV["SUBPIPE_TRANSLATE_MODEL"]
+      return nil if model.nil? || model.empty? || !File.file?(model)
+
+      server = nil
+      begin
+        server = start_server!(model: model, server_bin: server_bin)
+        uri = URI(server[:base_url])
+        content = nil
+        Net::HTTP.start(uri.host, uri.port, open_timeout: 30, read_timeout: ENV.fetch("SUBPIPE_LLAMA_SERVER_TIMEOUT", "180").to_i) do |http|
+          content = chat_complete(http, uri, user_prompt, max_tokens: max_tokens, system: system || SYSTEM_PROMPT)
+        end
+        content
+      rescue StandardError => e
+        warn "reflect LLM skipped: #{e.message}"
+        nil
+      ensure
+        stop_server!(server) if server
+      end
+    end
+
+    def chat_complete(http, base_uri, user_prompt, max_tokens: 512, system: nil)
       path = "#{base_uri.path}/v1/chat/completions".gsub(%r{//+}, "/")
       path = "/v1/chat/completions" if base_uri.path.nil? || base_uri.path.empty? || base_uri.path == "/"
       body = {
         "messages" => [
-          { "role" => "system", "content" => SYSTEM_PROMPT },
+          { "role" => "system", "content" => (system || SYSTEM_PROMPT) },
           { "role" => "user", "content" => user_prompt }
         ],
         "temperature" => 0.2,
@@ -535,6 +626,7 @@ module Subpipe
         en = cue["text_en"].to_s
         asr = cue["asr_text"].to_s
         sub = cue["subtitle_text"].to_s
+        few = Array(item[:few_shot]).filter_map { |r| Feedback.few_shot_prompt_pair(r) }
         {
           "id" => cue["id"],
           "text_en" => en,
@@ -543,6 +635,8 @@ module Subpipe
           "emotion" => cue["emotion"],
           "emotion_intensity" => cue["emotion_intensity"],
           "delivery" => cue["delivery"],
+          "speakers" => cue["speakers"],
+          "speaker_profile" => item[:speaker_profile],
           "duration_ms" => cue.dig("prosody", "duration_ms") || (
             cue["start_ms"] && cue["end_ms"] ? (cue["end_ms"].to_i - cue["start_ms"].to_i) : nil
           ),
@@ -552,11 +646,39 @@ module Subpipe
             "text_pl" => prev_cue["text_pl"]
           },
           "next" => next_cue && { "id" => next_cue["id"], "text_en" => next_cue["text_en"] },
-          "glossary" => item[:glossary].nil? || item[:glossary].empty? ? nil : item[:glossary]
+          "glossary" => item[:glossary].nil? || item[:glossary].empty? ? nil : item[:glossary],
+          "few_shot_corrections" => few.empty? ? nil : few
         }.compact
       end
       payload = { "cues" => cues }
-      "Translate each subtitle cue to Polish and flag names/jargon.\n#{JSON.generate(payload)}"
+      "Translate each subtitle cue to Polish and flag names/jargon.\n" \
+        "If few_shot_corrections are present, prefer pl_gold for similar source_en phrasing " \
+        "(pl_draft is the previous engine draft; ignore engine identity).\n" \
+        "If speaker_profile is present, match that speaker's register.\n" \
+        "#{JSON.generate(payload)}"
+    end
+
+    def few_shot_examples(out_dir, cue, context)
+      return [] if ENV.fetch("SUBPIPE_FEEDBACK_FEWSHOT", "1") == "0"
+
+      exclude = ENV["SUBPIPE_FEEDBACK_EXCLUDE_TAGS"].to_s.split(",").map(&:strip).reject(&:empty?)
+      limit = ENV.fetch("SUBPIPE_FEEDBACK_FEWSHOT_N", "3").to_i
+      Feedback.few_shot_for_cue(out_dir, cue, context: context, limit: limit, exclude_tags: exclude)
+    end
+
+    def speaker_profile_for(out_dir, cue, context)
+      sp = Feedback.primary_speaker(cue)
+      return nil if sp.nil? || sp.empty?
+
+      meta = Feedback.load_project_meta(out_dir, context)
+      mapped = (meta["speaker_map"] || {})[sp] || sp
+      path = File.join(Feedback.speakers_dir(out_dir, context), "#{mapped}.json")
+      path = File.join(Feedback.speakers_dir(out_dir, context), "#{sp}.json") unless File.file?(path)
+      return nil unless File.file?(path)
+
+      JSON.parse(File.read(path))
+    rescue StandardError
+      nil
     end
 
     # Soft-fail: returns Array of Hash/nil aligned to expected_ids (never aborts).
@@ -849,16 +971,30 @@ module Subpipe
       text.to_s.gsub("|", "\\|").gsub("\n", " ")
     end
 
-    def apply_draft!(out_dir, draft)
+    def apply_draft!(out_dir, draft, refresh_model_ids: nil)
       context = load_context!(out_dir)
       by_id = draft.fetch("translations").to_h { |t| [t.fetch("id"), t] }
+      refresh = refresh_model_ids && Array(refresh_model_ids).map(&:to_s).to_set
 
       missing = context["cues"].map { |c| c["id"] } - by_id.keys
       Subpipe.abort!("draft missing cue ids: #{missing.join(', ')}") unless missing.empty?
 
       context["cues"].each do |cue|
         t = by_id.fetch(cue["id"])
-        cue["text_pl"] = t.fetch("text_pl")
+        pl = t.fetch("text_pl")
+        cue["text_pl"] = pl
+        # Baseline for mentor Feedback (model → user). Keep first model output if re-apply.
+        # Retranslate path refreshes model baseline for touched ids.
+        if refresh&.include?(cue["id"].to_s)
+          cue["text_pl_model"] = pl
+          cue["pl_accepted_at"] = nil
+        elsif cue["text_pl_model"].to_s.empty?
+          cue["text_pl_model"] = pl
+        end
+        cue["text_en_model"] = cue["text_en"].to_s if cue["text_en_model"].to_s.empty?
+        # Single source of truth: subtitle == lektor; drop diverging overrides.
+        cue["lektor_line"] = nil
+        cue["lektor_directed_at"] = nil
         cue["review_names"] = Array(t["names"])
         cue["review_jargon"] = Array(t["jargon"])
         cue["review_keep_english"] = Array(t["keep_english"])
@@ -886,6 +1022,24 @@ module Subpipe
       puts "Applied translations → #{context_path}, #{ass_path} (#{flagged} cue(s) still marked needs_review)"
     end
 
+    # Mentor propagate: force-translate a cue id subset (glossary already in vocab/context).
+    def retranslate_cues!(out_dir, cue_ids:, vocab_path: nil, model: nil, llama_bin: nil)
+      ids = Array(cue_ids).map(&:to_s).reject(&:empty?).uniq
+      return [] if ids.empty?
+
+      draft = generate_draft(
+        out_dir,
+        force: false,
+        model: model,
+        llama_bin: llama_bin,
+        vocab_path: vocab_path,
+        only_ids: ids
+      )
+      write_draft_files!(out_dir, draft)
+      apply_draft!(out_dir, draft, refresh_model_ids: ids)
+      ids
+    end
+
     def load_context!(out_dir)
       path = File.join(out_dir, "context.json")
       Subpipe.abort!("missing #{path}; run merge/run first") unless File.file?(path)
@@ -899,7 +1053,7 @@ module Subpipe
         needles.any? { |n| hay.match?(/\b#{Regexp.escape(n)}\b/i) }
       end.map do |g|
         prefs = Vocab.preferred_list(g)
-        {
+        mapped = {
           "term" => g["term"],
           "preferred_translations" => prefs.empty? ? nil : prefs,
           "preferred_translation" => prefs.first,
@@ -907,6 +1061,7 @@ module Subpipe
           "keep_english" => g["keep_english"],
           "notes" => g["notes"]
         }.compact
+        mapped
       end
     end
 

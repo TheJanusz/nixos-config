@@ -11,7 +11,7 @@ require "pathname"
 require_relative "metrics"
 
 module Subpipe
-  # Offline XTTS-v2 lektor: voice.json + reference.wav, preview TUI, batch generate.
+  # Offline lektor: Orpheus PL (default) or XTTS-v2 via JSON-lines workers.
   module Lektor
     module_function
 
@@ -22,10 +22,18 @@ module Subpipe
 
     DEFAULT_VOICE = {
       "schema_version" => 1,
-      "engine" => "xtts_v2",
+      "engine" => "orpheus_pl",
+      "voice" => "tomasz",
+      "model" => "TeeZee/Orpheus-TTS-pl-v2.5",
       "language" => "pl",
       "reference_wav" => "reference.wav",
       "speed" => 1.0,
+      "orpheus" => {
+        # Slightly expressive baseline (Canopy-ish); emotion/delivery nudge per cue.
+        "temperature" => 0.7,
+        "top_p" => 0.85,
+        "repetition_penalty" => 1.35
+      },
       "delivery_defaults" => {
         "whisper" => { "speed" => 0.92 },
         "shout" => { "speed" => 1.08 },
@@ -37,17 +45,51 @@ module Subpipe
       }
     }.freeze
 
-    def run(out_dir, mode: "tui", force: false, reference: nil)
+    ORPHEUS_TEMP_MIN = 0.2
+    ORPHEUS_TEMP_MAX = 1.5
+    ORPHEUS_REP_MIN = 1.1
+    ORPHEUS_REP_MAX = 1.8
+    ORPHEUS_TOP_P_MIN = 0.1
+    ORPHEUS_TOP_P_MAX = 1.0
+
+    # Deltas added to voice orpheus knobs (scaled by emotion_intensity when present).
+    ORPHEUS_EMOTION_DELTA = {
+      "neutral" => {},
+      "happy" => { "temperature" => 0.08, "repetition_penalty" => 0.05 },
+      "amused" => { "temperature" => 0.1, "top_p" => 0.03, "repetition_penalty" => 0.05 },
+      "sad" => { "temperature" => -0.06, "top_p" => -0.05, "repetition_penalty" => -0.05 },
+      "angry" => { "temperature" => 0.12, "repetition_penalty" => 0.1 },
+      "fearful" => { "temperature" => 0.06, "top_p" => 0.02 },
+      "surprised" => { "temperature" => 0.1, "repetition_penalty" => 0.06 },
+      "disgusted" => { "temperature" => 0.05, "repetition_penalty" => 0.04 }
+    }.freeze
+
+    ORPHEUS_DELIVERY_DELTA = {
+      "normal" => {},
+      "whisper" => { "temperature" => -0.08, "top_p" => -0.05, "repetition_penalty" => -0.06 },
+      "shout" => { "temperature" => 0.14, "repetition_penalty" => 0.12 },
+      "laugh" => { "temperature" => 0.1, "top_p" => 0.05, "repetition_penalty" => 0.05 },
+      "cry" => { "temperature" => -0.05, "top_p" => -0.03, "repetition_penalty" => -0.04 },
+      "rushed" => { "temperature" => 0.1, "repetition_penalty" => 0.12 },
+      "slow" => { "temperature" => -0.06, "repetition_penalty" => -0.08 }
+    }.freeze
+
+    ORPHEUS_ENGINES = %w[orpheus_pl orpheus].freeze
+    XTTS_ENGINES = %w[xtts_v2 xtts].freeze
+
+    def run(out_dir, mode: "tui", force: false, reference: nil, model: nil, llama_bin: nil)
       out_dir = File.expand_path(out_dir)
       case mode.to_s
       when "init"
         init!(out_dir, reference: reference)
+      when "direct"
+        LektorDirect.run(out_dir, force: force, model: model, llama_bin: llama_bin)
       when "generate"
         generate!(out_dir, force: force)
       when "tui", "preview"
         tui!(out_dir)
       else
-        Subpipe.abort!("unknown lektor mode: #{mode} (use init|tui|generate)")
+        Subpipe.abort!("unknown lektor mode: #{mode} (use init|tui|direct|generate)")
       end
     end
 
@@ -56,6 +98,7 @@ module Subpipe
       voice_path = File.join(out_dir, VOICE_NAME)
       voice = DEFAULT_VOICE.dup
       voice["delivery_defaults"] = DEFAULT_VOICE["delivery_defaults"].dup
+      voice["orpheus"] = DEFAULT_VOICE["orpheus"].dup
 
       if reference && !reference.to_s.empty?
         src = File.expand_path(reference, Dir.pwd)
@@ -67,10 +110,14 @@ module Subpipe
       end
 
       File.write(voice_path, JSON.pretty_generate(voice) + "\n")
-      puts "Initialized #{voice_path}"
-      ref = resolve_reference(out_dir, voice)
-      unless File.file?(ref)
-        warn "Place a 6–30s clean mono WAV at #{File.join(out_dir, 'reference.wav')} (or pass --reference PATH)"
+      puts "Initialized #{voice_path} (engine=#{voice['engine']})"
+      if needs_reference?(voice)
+        ref = resolve_reference(out_dir, voice)
+        unless File.file?(ref)
+          warn "Place a 6–30s clean mono WAV at #{File.join(out_dir, 'reference.wav')} (or pass --reference PATH)"
+        end
+      else
+        puts "Orpheus voice=#{voice['voice']} (no reference.wav required)"
       end
       voice_path
     end
@@ -80,7 +127,9 @@ module Subpipe
       context = load_context!(out_dir)
       voice = load_voice!(out_dir)
       ref = resolve_reference(out_dir, voice)
-      Subpipe.abort!("missing reference WAV: #{ref} (subpipe lektor init --reference FILE)") unless File.file?(ref)
+      if needs_reference?(voice)
+        Subpipe.abort!("missing reference WAV: #{ref} (subpipe lektor init --reference FILE)") unless File.file?(ref)
+      end
 
       lektor_dir = File.join(out_dir, LEKTOR_DIR)
       FileUtils.mkdir_p(lektor_dir)
@@ -122,10 +171,18 @@ module Subpipe
           end
 
           speed = effective_speed(voice, cue)
+          orpheus = effective_orpheus(voice, cue)
           t1 = Metrics.monotonic
-          result = worker.synth(text: text, out_path: out_wav, speed: speed, language: voice["language"])
+          result = worker.synth(
+            text: text,
+            out_path: out_wav,
+            speed: speed,
+            language: voice["language"],
+            speaker: voice["voice"],
+            orpheus: orpheus
+          )
           infer_s += Metrics.monotonic - t1
-          Subpipe.abort!("xtts synth failed for #{cue['id']}: #{result['error']}") unless result["ok"]
+          Subpipe.abort!("lektor synth failed for #{cue['id']}: #{result['error']}") unless result["ok"]
 
           dur = result["duration_s"].to_f
           audio_out_s += dur
@@ -136,6 +193,9 @@ module Subpipe
             "duration_s" => dur,
             "text" => text,
             "speed" => speed,
+            "orpheus" => orpheus,
+            "engine" => voice["engine"],
+            "voice" => voice["voice"],
             "generated_at" => Time.now.utc.iso8601
           ) + "\n")
           warn format("lektor %d/%d  %s  %.2fs", n, cues.size, cue["id"], dur)
@@ -204,8 +264,11 @@ module Subpipe
       start_worker = lambda do
         next worker_holder[0] if worker_holder[0]
 
-        Subpipe.abort!("missing reference WAV: #{ref}") unless File.file?(ref)
-        warn "Starting XTTS worker (first load may take a while)…"
+        if needs_reference?(voice)
+          Subpipe.abort!("missing reference WAV: #{ref}") unless File.file?(ref)
+        end
+        eng = voice["engine"].to_s
+        warn "Starting lektor worker (#{eng}; first load may take a while)…"
         worker_holder[0] = Worker.start!(voice: voice, reference: ref)
         worker_holder[0]
       end
@@ -269,7 +332,7 @@ module Subpipe
           when "e"
             next if idxs.empty?
             cue = cues[idxs[cursor]]
-            puts "Spoken line (empty keeps current; '-' clears lektor_line override):"
+            puts "Polish line (subtitle + lektor; empty keeps current; '-' clears leftover lektor_line override):"
             print "> "
             line = stdin_line
             next if line.nil?
@@ -277,14 +340,24 @@ module Subpipe
               cue["lektor_line"] = nil
               dirty_context = true
             elsif !line.strip.empty?
-              cue["lektor_line"] = line.rstrip
+              cue["text_pl"] = line.rstrip
+              cue["lektor_line"] = nil
+              cue["lektor_directed_at"] = nil
               dirty_context = true
             end
           when "+"
-            voice["speed"] = (voice["speed"].to_f + 0.05).round(2)
+            if orpheus_engine?(voice)
+              nudge_orpheus_pace!(voice, +0.05)
+            else
+              voice["speed"] = (voice["speed"].to_f + 0.05).round(2)
+            end
             dirty_voice = true
           when "-"
-            voice["speed"] = [voice["speed"].to_f - 0.05, 0.5].max.round(2)
+            if orpheus_engine?(voice)
+              nudge_orpheus_pace!(voice, -0.05)
+            else
+              voice["speed"] = [voice["speed"].to_f - 0.05, 0.5].max.round(2)
+            end
             dirty_voice = true
           when "s"
             save_voice!(out_dir, voice)
@@ -327,8 +400,24 @@ module Subpipe
       tmp = File.join(out_dir, LEKTOR_DIR, ".preview.wav")
       FileUtils.mkdir_p(File.dirname(tmp))
       speed = effective_speed(voice, cue)
-      warn "Synthesizing preview (speed=#{speed})…"
-      result = worker.synth(text: text, out_path: tmp, speed: speed, language: voice["language"])
+      orpheus = effective_orpheus(voice, cue)
+      if orpheus_engine?(voice)
+        warn format(
+          "Synthesizing preview (engine=%s voice=%s temp=%.2f top_p=%.2f rep=%.2f)…",
+          voice["engine"], voice["voice"],
+          orpheus["temperature"], orpheus["top_p"], orpheus["repetition_penalty"]
+        )
+      else
+        warn "Synthesizing preview (engine=#{voice['engine']} voice=#{voice['voice']} speed=#{speed})…"
+      end
+      result = worker.synth(
+        text: text,
+        out_path: tmp,
+        speed: speed,
+        language: voice["language"],
+        speaker: voice["voice"],
+        orpheus: orpheus
+      )
       Subpipe.abort!("preview synth failed: #{result['error']}") unless result["ok"]
       play_wav!(tmp)
     end
@@ -352,10 +441,23 @@ module Subpipe
     def print_tui_header(out_dir, voice, ref, filter, cursor, total, dirty_voice, dirty_context)
       puts "subpipe lektor — #{out_dir}"
       dirty = [dirty_voice ? "voice*" : nil, dirty_context ? "context*" : nil].compact.join(" ")
-      puts "filter: #{filter}  cue: #{total.zero? ? 0 : cursor + 1}/#{total}  speed: #{voice['speed']}  lang: #{voice['language']}" \
+      eng = voice["engine"].to_s
+      voice_id = voice["voice"].to_s
+      puts "filter: #{filter}  cue: #{total.zero? ? 0 : cursor + 1}/#{total}  engine: #{eng}" \
+           "#{voice_id.empty? ? '' : "  voice: #{voice_id}"}  lang: #{voice['language']}" \
            "#{dirty.empty? ? '' : "  #{dirty}"}"
-      puts "reference: #{ref}#{File.file?(ref) ? '' : '  (MISSING)'}"
-      puts "-" * [Metrics.respond_to?(:format_duration) ? 72 : 72, term_width].min
+      if orpheus_engine?(voice)
+        o = effective_orpheus(voice, {})
+        puts format(
+          "orpheus: temp=%.2f  top_p=%.2f  rep=%.2f  model=%s",
+          o["temperature"], o["top_p"], o["repetition_penalty"],
+          voice["model"].to_s.empty? ? "(default)" : voice["model"]
+        )
+      else
+        puts "speed: #{voice['speed']}"
+        puts "reference: #{ref}#{File.file?(ref) ? '' : '  (MISSING)'}" if needs_reference?(voice)
+      end
+      puts "-" * [72, term_width].min
     end
 
     def print_focused_cue(cue, voice)
@@ -366,35 +468,60 @@ module Subpipe
       puts "EN:"
       wrap_text(cue["text_en"].to_s, width).each { |l| puts l }
       puts
-      puts "Spoken (#{cue['lektor_line'] ? 'lektor_line' : 'text_pl'}):"
+      puts "PL (subtitle + lektor#{cue['lektor_line'] ? '; legacy lektor_line override' : ''}):"
       wrap_text(text, width).each { |l| puts l }
       puts
-      puts "speed for cue: #{effective_speed(voice, cue)}"
+      if orpheus_engine?(voice)
+        o = effective_orpheus(voice, cue)
+        puts format(
+          "orpheus for cue: temp=%.2f  top_p=%.2f  rep=%.2f  (emotion=%s/%.2f delivery=%s)",
+          o["temperature"], o["top_p"], o["repetition_penalty"],
+          cue["emotion"] || "-", cue["emotion_intensity"].to_f,
+          cue["delivery"] || "-"
+        )
+      else
+        puts "speed for cue: #{effective_speed(voice, cue)}"
+      end
     end
 
     def menu_lines(filter)
       other = filter == :all ? "spoken-only" : "all"
       [
-        "[j]/[k] next/prev   [0]/[G] first/last   [p]/[space] preview   [e] edit spoken line",
-        "[+]/[-] speed   [f] show #{other}   [s] save voice+context   [g] generate   [h] help   [q] quit"
+        "[j]/[k] next/prev   [0]/[G] first/last   [p]/[space] preview   [e] edit PL line",
+        "[+]/[-] pace/speed   [f] show #{other}   [s] save voice+context   [g] generate   [h] help   [q] quit"
       ]
     end
 
     def print_help
       puts <<~HELP
 
-        Lektor TUI (XTTS-v2)
-          Needs voice.json + reference.wav (subpipe lektor init --reference FILE).
-          Timbre comes from the reference clip — not a text description.
-          Delivery uses speed (+ analyze delivery tags). Preview one line before generate.
+        Lektor TUI
+          voice.json engine: orpheus_pl (default; preset voice, no reference) or xtts_v2 (needs reference.wav).
+          Orpheus default: model TeeZee/Orpheus-TTS-pl-v2.5, voice tomasz (Common Voice PL).
+          Other voices: jan konrad wojciech … (see model card). Legacy v2.0: bartek/ola/…
+          Orpheus sampling in voice.json → orpheus.{temperature,top_p,repetition_penalty}
+            Analyze emotion/delivery nudge those knobs per cue (intensity scales).
+            Optional cue.orpheus overrides win last. Higher temp+rep ≈ more energy.
+          Translate already writes speakable text_pl (subtitle = lektor, same punctuation).
+            Edit with e; optional `subpipe lektor direct` re-shapes text_pl without EN retranslate.
+          XTTS: timbre from reference.wav; +/- adjusts speed.
 
           j/k     next/prev cue
           p       synthesize + play current line
-          e       edit lektor_line override
-          +/-     global speed in voice.json
+          e       edit text_pl (subtitle + lektor)
+          +/-     Orpheus: nudge temp+rep pace; XTTS: global speed
           s       save voice.json and context.json
           g       generate all missing/changed cue WAVs
       HELP
+    end
+
+    def needs_reference?(voice)
+      eng = voice["engine"].to_s
+      eng.empty? || XTTS_ENGINES.include?(eng)
+    end
+
+    def orpheus_engine?(voice)
+      ORPHEUS_ENGINES.include?(voice["engine"].to_s)
     end
 
     def visible_indices(cues, filter)
@@ -447,16 +574,76 @@ module Subpipe
       (base * adj.to_f).round(3)
     end
 
+    def effective_orpheus(voice, cue = nil)
+      base = DEFAULT_VOICE["orpheus"].merge(voice["orpheus"] || {})
+      cue_hash = cue.is_a?(Hash) ? cue : {}
+
+      # Analyze tags → sampling deltas (story lektor range; intensity scales 0..1).
+      intensity = cue_hash["emotion_intensity"]
+      scale = begin
+        f = Float(intensity)
+        f.nan? ? 0.55 : [[f, 0.0].max, 1.0].min
+      rescue StandardError
+        # Missing intensity: still apply a mild delivery/emotion nudge.
+        0.55
+      end
+      # Neutral+normal with ~0 intensity → no delta.
+      emotion = cue_hash["emotion"].to_s
+      delivery = cue_hash["delivery"].to_s
+      if emotion.empty? && delivery.empty?
+        scale = 0.0
+      elsif emotion == "neutral" && (delivery.empty? || delivery == "normal") && scale <= 0.05
+        scale = 0.0
+      end
+
+      delta = Hash.new(0.0)
+      (ORPHEUS_EMOTION_DELTA[emotion] || {}).each { |k, v| delta[k] += v.to_f }
+      (ORPHEUS_DELIVERY_DELTA[delivery] || {}).each { |k, v| delta[k] += v.to_f }
+      %w[temperature top_p repetition_penalty].each do |k|
+        base[k] = base[k].to_f + (delta[k] * scale)
+      end
+
+      # Explicit cue.orpheus wins last.
+      override = cue_hash["orpheus"] || {}
+      merged = base.merge(override)
+      {
+        "temperature" => clamp_f(merged["temperature"], ORPHEUS_TEMP_MIN, ORPHEUS_TEMP_MAX, 0.7),
+        "top_p" => clamp_f(merged["top_p"], ORPHEUS_TOP_P_MIN, ORPHEUS_TOP_P_MAX, 0.85),
+        "repetition_penalty" => clamp_f(merged["repetition_penalty"], ORPHEUS_REP_MIN, ORPHEUS_REP_MAX, 1.35)
+      }
+    end
+
+    def clamp_f(val, min_v, max_v, default)
+      f = begin
+        Float(val)
+      rescue StandardError
+        default
+      end
+      [[f, min_v].max, max_v].min.round(3)
+    end
+
+    def nudge_orpheus_pace!(voice, delta)
+      voice["orpheus"] = effective_orpheus(voice, nil)
+      voice["orpheus"]["temperature"] =
+        clamp_f(voice["orpheus"]["temperature"] + delta, ORPHEUS_TEMP_MIN, ORPHEUS_TEMP_MAX, 0.7)
+      voice["orpheus"]["repetition_penalty"] =
+        clamp_f(voice["orpheus"]["repetition_penalty"] + delta, ORPHEUS_REP_MIN, ORPHEUS_REP_MAX, 1.35)
+      voice["orpheus"]
+    end
+
     def cue_fingerprint(cue, voice, ref)
       payload = {
         "text" => spoken_text(cue),
         "speed" => effective_speed(voice, cue),
         "language" => voice["language"],
         "engine" => voice["engine"],
+        "voice" => voice["voice"],
+        "model" => voice["model"],
+        "orpheus" => effective_orpheus(voice, cue),
         "emotion" => cue["emotion"],
         "delivery" => cue["delivery"],
-        "ref" => File.basename(ref),
-        "ref_mtime" => (File.mtime(ref).to_i if File.file?(ref)),
+        "ref" => (File.basename(ref) if needs_reference?(voice)),
+        "ref_mtime" => (File.mtime(ref).to_i if needs_reference?(voice) && File.file?(ref)),
         "voice_speed" => voice["speed"]
       }
       Digest::SHA256.hexdigest(JSON.generate(payload))
@@ -474,7 +661,32 @@ module Subpipe
       data = JSON.parse(File.read(path))
       DEFAULT_VOICE.merge(data).tap do |v|
         v["delivery_defaults"] = DEFAULT_VOICE["delivery_defaults"].merge(data["delivery_defaults"] || {})
+        v["orpheus"] = DEFAULT_VOICE["orpheus"].merge(data["orpheus"] || {})
       end
+    end
+
+    def load_or_init_voice(out_dir)
+      path = File.join(out_dir, VOICE_NAME)
+      init!(out_dir) unless File.file?(path)
+      load_voice!(out_dir)
+    end
+
+    def preview_cue_to_path!(out_dir, worker, voice, cue, out_path)
+      text = spoken_text(cue)
+      FileUtils.mkdir_p(File.dirname(out_path))
+      speed = effective_speed(voice, cue)
+      orpheus = effective_orpheus(voice, cue)
+      result = worker.synth(
+        text: text,
+        out_path: out_path,
+        speed: speed,
+        language: voice["language"],
+        speaker: voice["voice"],
+        orpheus: orpheus
+      )
+      raise "preview synth failed: #{result['error']}" unless result["ok"]
+
+      result
     end
 
     def save_voice!(out_dir, voice)
@@ -503,12 +715,19 @@ module Subpipe
     # ---- Worker (JSON-lines over stdin) ----
     class Worker
       def self.start!(voice:, reference:)
-        if (hook = ENV["SUBPIPE_XTTS_HOOK"].to_s.strip) != ""
+        eng = voice["engine"].to_s
+        if Lektor.orpheus_engine?(voice)
+          if (hook = ENV["SUBPIPE_ORPHEUS_HOOK"].to_s.strip) != ""
+            cmd = Shellwords.split(hook)
+          else
+            cmd = [ENV.fetch("SUBPIPE_ORPHEUS_WORKER", "subpipe-orpheus-worker")]
+          end
+        elsif (hook = ENV["SUBPIPE_XTTS_HOOK"].to_s.strip) != ""
           cmd = Shellwords.split(hook)
         else
           cmd = [ENV.fetch("SUBPIPE_XTTS_WORKER", "subpipe-xtts-worker")]
         end
-        # Keep stderr separate so Coqui/torch logs do not corrupt JSON-lines stdout.
+        # Keep stderr separate so torch / HF logs do not corrupt JSON-lines stdout.
         stdin, stdout, stderr, wait_thr = Open3.popen3(*cmd)
         Thread.new do
           begin
@@ -518,8 +737,14 @@ module Subpipe
           end
         end
         worker = new(stdin, stdout, wait_thr)
-        res = worker.request("load", "language" => voice["language"], "reference_wav" => reference)
-        raise "xtts load failed: #{res['error']}" if res && res["ok"] == false
+        load_args = { "language" => voice["language"] }
+        load_args["voice"] = voice["voice"] if voice["voice"]
+        load_args["model"] = voice["model"] if voice["model"].to_s.strip != ""
+        if Lektor.needs_reference?(voice) && reference && File.file?(reference.to_s)
+          load_args["reference_wav"] = reference
+        end
+        res = worker.request("load", load_args)
+        raise "lektor load failed (#{eng}): #{res['error']}" if res && res["ok"] == false
 
         worker
       end
@@ -536,18 +761,16 @@ module Subpipe
         @stdin.flush
         loop do
           line = @stdout.gets
-          raise "xtts worker died" if line.nil?
+          raise "lektor worker died" if line.nil?
 
           line = line.strip
           next if line.empty?
-          # Coqui/torch sometimes print banners on stdout; ignore non-JSON noise.
           unless line.start_with?("{")
-            warn "xtts worker: #{line}" unless line.start_with?(">")
+            warn "lektor worker: #{line}" unless line.start_with?(">")
             next
           end
 
           msg = JSON.parse(line)
-          # Skip progress events during load (loading / ready); wait for final payload.
           next if msg["event"] == "loading"
           next if cmd == "load" && msg["event"] == "ready" && !msg.key?("loaded")
 
@@ -555,14 +778,20 @@ module Subpipe
         end
       end
 
-      def synth(text:, out_path:, speed:, language:)
-        request(
-          "synth",
+      def synth(text:, out_path:, speed:, language:, speaker: nil, orpheus: nil)
+        extra = {
           "text" => text,
           "out_path" => out_path,
           "speed" => speed,
           "language" => language
-        )
+        }
+        extra["voice"] = speaker if speaker && !speaker.to_s.empty?
+        if orpheus.is_a?(Hash)
+          extra["temperature"] = orpheus["temperature"]
+          extra["top_p"] = orpheus["top_p"]
+          extra["repetition_penalty"] = orpheus["repetition_penalty"]
+        end
+        request("synth", extra)
       end
 
       def stop!

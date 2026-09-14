@@ -74,8 +74,9 @@ module Subpipe
         "cues" => cues,
         "glossary" => glossary,
         "future" => {
-          "notes" => "Fill text_pl / lektor_line / tts_voice per cue in later stages without re-running ASR. Promote glossary prefs with: subpipe vocab promote",
-          "target_language" => "pl"
+          "notes" => "Fill text_pl / lektor_line / tts_voice per cue in later stages without re-running ASR. Promote glossary prefs with: subpipe vocab promote. Mentor accepts → Show/corrections.jsonl (see Feedback).",
+          "target_language" => "pl",
+          "style_tags" => Array(show_store["style_tags"])
         }
       }
 
@@ -162,9 +163,13 @@ module Subpipe
           "asr_text" => asr&.dig(:text),
           "subtitle_text" => soft[:text],
           "confidence" => asr&.dig(:confidence),
-          "speakers" => nil,
+          "speakers" => nil, # filled by `subpipe diarize` (SPEAKER_xx); map names in subpipe-project.json
           "notes" => nil,
           "text_pl" => nil,
+          "text_pl_model" => nil, # baseline at translate time for Feedback JSONL
+          "text_en_model" => nil, # baseline EN (softsub/ASR) for Feedback JSONL
+          "en_accepted_at" => nil,
+          "pl_accepted_at" => nil,
           "lektor_line" => nil,
           "tts_voice" => nil
         }
@@ -227,6 +232,10 @@ module Subpipe
         "speakers" => nil,
         "notes" => nil,
         "text_pl" => nil,
+        "text_pl_model" => nil,
+        "text_en_model" => nil,
+        "en_accepted_at" => nil,
+        "pl_accepted_at" => nil,
         "lektor_line" => nil,
         "tts_voice" => nil
       }

@@ -269,6 +269,7 @@ module Subpipe
       {
         "schema_version" => 1,
         "show" => show,
+        "style_tags" => [],
         "terms" => []
       }
     end
@@ -279,6 +280,7 @@ module Subpipe
 
       data = JSON.parse(File.read(path))
       data["schema_version"] ||= 1
+      data["style_tags"] = Array(data["style_tags"])
       data["terms"] = Array(data["terms"]).map { |t| normalize_term!(t) }
       data
     rescue JSON::ParserError => e
@@ -286,11 +288,18 @@ module Subpipe
     end
 
     # preferred_translations[] plus legacy preferred_translation → unique list.
+    # Split "a, b, c" so a single --pl "samochód, auto" becomes three alternatives.
     def preferred_list(entry)
       return [] if entry.nil?
 
       list = Array(entry["preferred_translations"]) + Array(entry["preferred_translation"])
-      list.map { |p| p.to_s.strip }.reject(&:empty?).uniq
+      expand_preferred_forms(list)
+    end
+
+    def expand_preferred_forms(list)
+      Array(list).flat_map do |p|
+        p.to_s.split(/[,;|]/).map(&:strip)
+      end.reject(&:empty?).uniq
     end
 
     def normalize_term!(entry)
@@ -304,7 +313,7 @@ module Subpipe
     end
 
     def apply_preferred!(entry, translations, replace: false)
-      incoming = Array(translations).map { |p| p.to_s.strip }.reject(&:empty?)
+      incoming = expand_preferred_forms(translations)
       return entry if incoming.empty? && !replace
 
       prefs = replace ? incoming : (preferred_list(entry) + incoming).uniq

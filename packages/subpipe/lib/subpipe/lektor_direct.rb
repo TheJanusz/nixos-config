@@ -2,75 +2,69 @@
 
 require "json"
 require "open3"
-require "tempfile"
 require "fileutils"
 require "time"
 require "socket"
 require "net/http"
 require "uri"
 require "timeout"
+require "tmpdir"
 require_relative "metrics"
 
 module Subpipe
-  # Per-cue delivery analysis: ffmpeg loudness + LLM labels → context.json.
-  # Runs after merge, before translate. Same fields later drive lektor/TTS.
+  # Optional re-pass: reshape existing text_pl for speakable TV-lektor (same field
+  # for subtitle + Orpheus). Primary path is unified translate; use this after
+  # heavy manual edits without EN→PL again.
   #
-  # Cue fields written:
-  #   emotion, emotion_intensity (0..1), delivery, prosody { mean_db, max_db, duration_ms }
-  #
-  # Perf: one llama-server, HTTP keep-alive, batched cues, silence short-circuit.
-  module Analyze
+  # Writes cue["text_pl"], clears lektor_line, refreshes pl.ass.
+  # Skip: empty text_pl / silence cues only (rewrites all speakable cues).
+  module LektorDirect
     module_function
 
-    EMOTIONS = %w[
-      neutral happy amused sad angry fearful surprised disgusted
-    ].freeze
-
-    DELIVERIES = %w[
-      normal whisper shout laugh cry rushed slow
-    ].freeze
-
-    # Treat as non-speech → skip LLM (neutral/normal).
-    SILENCE_MEAN_DB = -45.0
-    SILENCE_MAX_DURATION_MS = 120
-    SILENCE_MAX_TEXT_CHARS = 2
-
-    DEFAULT_BATCH = 8
+    DEFAULT_BATCH = 6
 
     SYSTEM_PROMPT = <<~PROMPT.freeze
-      You label spoken subtitle cues for emotion and delivery style.
-      Use the English text plus acoustic hints (loudness dB, duration).
-      Pick emotion from: #{EMOTIONS.join(', ')}.
-      Pick delivery from: #{DELIVERIES.join(', ')}.
-      emotion_intensity is 0.0 (subtle) to 1.0 (extreme).
-      Prefer neutral/normal when unsure. Do not invent speakers.
+      You are a Polish TV lektor director. Rewrite each cue's text_pl in place.
+      The result is BOTH the on-screen subtitle and the Orpheus narration
+      (same wording and punctuation).
 
-      You will receive a JSON object with a "cues" array (1 or more items).
-      Reply with ONLY a JSON array with one object per cue, same ids, same order:
-      [{"id":"<cue id>","emotion":"neutral","emotion_intensity":0.3,"delivery":"normal"}]
-      No markdown, no commentary.
+      Goals:
+      - Keep meaning and Polish; do not invent facts or change names/terms.
+      - Prefer concise, flowing phrasing over stiff or wordy lines.
+      - Warm TV-lektor tone: slight emotion from the tags — not dry documentary,
+        not stage acting or cartoon exaggeration.
+      - Shape breath groups: use … and — for natural pauses where delivery needs it
+        (hesitation, weight, rush breaks). Prefer shorter phrases over long run-ons.
+      - Match intensity: low intensity → subtle punctuation only; high → clearer pauses.
+      - delivery hints: whisper → softer/shorter; shout → punchier; rushed → tighter;
+        slow → more … / —; laugh/cry → light rhythm, still narratable aloud.
+      - No SSML, no markdown, no English tags like <laugh>, no stage directions,
+        no quotes around the whole line, no commentary.
+
+      You receive JSON with a "cues" array. Reply with ONLY a JSON array, same ids/order:
+      [{"id":"<cue id>","text_pl":"..."}]
     PROMPT
 
     def run(out_dir, force: false, model: nil, llama_bin: nil)
       t0 = Metrics.monotonic
       out_dir = File.expand_path(out_dir)
       context = load_context!(out_dir)
-      audio = resolve_audio!(out_dir, context)
       cues = Array(context["cues"])
       Subpipe.abort!("no cues in context.json") if cues.empty?
 
-      analyzed = 0
+      directed = 0
       skipped = 0
       silence = 0
       total = cues.size
       tty = $stderr.tty?
-      batch_size = ENV.fetch("SUBPIPE_ANALYZE_BATCH", DEFAULT_BATCH.to_s).to_i
+      batch_size = ENV.fetch("SUBPIPE_LEKTOR_DIRECT_BATCH", DEFAULT_BATCH.to_s).to_i
       batch_size = DEFAULT_BATCH if batch_size < 1
-      use_hook = ENV["SUBPIPE_ANALYZE_HOOK"].to_s.strip != ""
-      en_words = 0
+      use_hook = ENV["SUBPIPE_LEKTOR_DIRECT_HOOK"].to_s.strip != ""
+      pl_words = 0
       llm_started = nil
       llm_elapsed = 0.0
 
+      # force: rewrite even when lektor_directed_at is set (incremental re-runs).
       with_inference(model: model, server_bin: llama_bin, use_hook: use_hook) do |infer|
         llm_started = Metrics.monotonic
         pending = []
@@ -83,40 +77,44 @@ module Subpipe
           pending.each do |item|
             cue = item[:cue]
             result = by_id[cue["id"].to_s]
-            Subpipe.abort!("analyze batch missing id #{cue['id']}") unless result
-            apply_result!(cue, result)
-            analyzed += 1
-            en_words += Metrics.word_count(cue["text_en"])
-            detail = "#{cue['emotion']}/#{cue['delivery']}  #{cue['emotion_intensity']}"
-            progress_line!(tty, item[:n], total, cue["id"], detail)
+            Subpipe.abort!("lektor direct batch missing id #{cue['id']}") unless result
+            line = sanitize_line(result["text_pl"] || result["lektor_line"], fallback: item[:text_pl])
+            cue["text_pl"] = line
+            cue["lektor_line"] = nil
+            cue["lektor_directed_at"] = Time.now.utc.iso8601
+            # Direct becomes the mentor baseline (not a human edit vs translate).
+            cue["text_pl_model"] = line
+            cue["pl_accepted_at"] = nil
+            directed += 1
+            pl_words += Metrics.word_count(line)
+            preview = line.length > 48 ? "#{line[0, 45]}…" : line
+            progress_line!(tty, item[:n], total, cue["id"], preview)
           end
           pending.clear
         end
 
         cues.each_with_index do |cue, idx|
           n = idx + 1
-          if !force && cue["emotion"] && !cue["emotion"].to_s.strip.empty?
-            skipped += 1
-            progress_line!(tty, n, total, cue["id"], "skip")
+          text_pl = cue["text_pl"].to_s.strip
+
+          if text_pl.empty? || Lektor.silence_cue?(cue)
+            silence += 1
+            progress_line!(tty, n, total, cue["id"], "silence")
             next
           end
 
-          prosody = measure_prosody(audio, cue)
-          cue["prosody"] = prosody
-
-          if silence_cue?(cue, prosody)
-            apply_silence!(cue)
-            silence += 1
-            progress_line!(tty, n, total, cue["id"], "silence")
+          if !force && cue["lektor_directed_at"] && !cue["lektor_directed_at"].to_s.strip.empty?
+            skipped += 1
+            progress_line!(tty, n, total, cue["id"], "skip")
             next
           end
 
           pending << {
             cue: cue,
             n: n,
+            text_pl: text_pl,
             prev: idx.positive? ? cues[idx - 1] : nil,
-            nxt: cues[idx + 1],
-            prosody: prosody
+            nxt: cues[idx + 1]
           }
           flush.call if pending.size >= batch_size
         end
@@ -126,60 +124,52 @@ module Subpipe
       $stderr.print "\n" if tty
 
       context["future"] ||= {}
-      context["future"]["analyze_applied_at"] = Time.now.utc.iso8601
+      context["future"]["lektor_direct_applied_at"] = Time.now.utc.iso8601
       context["future"]["notes"] = [
         context.dig("future", "notes"),
-        "Emotion/delivery from subpipe analyze; edit in review before translate/dub."
+        "text_pl re-shaped by subpipe lektor direct (subtitle = lektor); edit in TUI (e)."
       ].compact.reject(&:empty?).uniq.join(" ")
-
-      context["assets"] ||= {}
-      context["assets"]["audio"] ||= File.basename(audio)
 
       path = File.join(out_dir, "context.json")
       File.write(path, JSON.pretty_generate(context))
-      puts "Analyzed #{analyzed} cue(s), silence #{silence}, skipped #{skipped} → #{path}"
+
+      stem = Subpipe.source_stem(context["source"] || {})
+      ass_path = Subpipe.ass_path(out_dir, stem, "pl")
+      Ass.write(
+        ass_path,
+        context["cues"],
+        title: "#{context.dig('source', 'basename') || 'subpipe'} (pl)",
+        text_key: "text_pl"
+      )
+      context["assets"] ||= {}
+      context["assets"]["pl_ass"] = File.basename(ass_path)
+      File.write(path, JSON.pretty_generate(context))
+
+      puts "Directed #{directed} cue(s), silence #{silence}, skipped #{skipped} → #{path}, #{ass_path}"
 
       total_s = Metrics.monotonic - t0
       rows = [
-        ["wall time", Metrics.format_duration(total_s)],
-        ["inference", Metrics.format_duration(llm_elapsed)],
+        ["wall time", "#{Metrics.format_duration(total_s)}  (inference window #{Metrics.format_duration(llm_elapsed)})"],
         ["batch size", batch_size.to_s],
-        ["cues", "#{analyzed} analyzed, #{skipped} skipped, #{silence} silence"]
+        ["cues", "#{directed} directed, #{skipped} skipped, #{silence} silence"]
       ]
-      per_cue = Metrics.per_unit(llm_elapsed, analyzed, unit: "cue")
-      rows << ["per cue", per_cue] if per_cue
-      if en_words.positive?
-        rows << ["EN words", en_words.to_s]
-        per_w = Metrics.per_unit(llm_elapsed, en_words, unit: "word")
-        rows << ["per EN word", per_w] if per_w
+      per_cue = Metrics.per_unit(llm_elapsed, directed, unit: "cue")
+      rows << ["per cue", "#{per_cue} (inference / directed cue)"] if per_cue
+      if pl_words.positive? && llm_elapsed.positive?
+        rows << ["per PL word", "#{format('%.3fs', llm_elapsed / pl_words)}  (#{pl_words} PL words)"]
+      elsif pl_words.positive?
+        rows << ["PL words", pl_words.to_s]
       end
-      Metrics.print_report("Analyze", rows)
-      context
+      Metrics.print_report("Lektor direct", rows)
     end
 
-    def silence_cue?(cue, prosody)
-      text = [cue["text_en"], cue["asr_text"]].compact.map { |t| t.to_s.strip }.reject(&:empty?).join(" ")
-      short_text = text.length <= SILENCE_MAX_TEXT_CHARS
-      tiny = prosody["duration_ms"].to_i <= SILENCE_MAX_DURATION_MS
-      quiet = prosody["mean_db"] && prosody["mean_db"] <= SILENCE_MEAN_DB
-      # Need acoustic silence (or tiny slice) AND little/no text.
-      short_text && (quiet || tiny)
-    end
-
-    def apply_silence!(cue)
-      cue["emotion"] = "neutral"
-      cue["emotion_intensity"] = 0.0
-      cue["delivery"] = "normal"
-    end
-
-    # Yields callable: pending_items → array of result hashes.
     def with_inference(model:, server_bin:, use_hook:)
       if use_hook
-        hook = ENV["SUBPIPE_ANALYZE_HOOK"]
+        hook = ENV["SUBPIPE_LEKTOR_DIRECT_HOOK"]
         yield(lambda do |pending|
           prompt = build_batch_prompt(pending)
           out, status = Open3.capture2(hook, stdin_data: prompt)
-          Subpipe.abort!("analyze hook failed") unless status.success?
+          Subpipe.abort!("lektor direct hook failed") unless status.success?
           parse_batch_json(out, pending.map { |p| p[:cue]["id"].to_s })
         end)
         return
@@ -200,11 +190,12 @@ module Subpipe
       end
       begin
         uri = URI(server[:base_url])
-        Net::HTTP.start(uri.host, uri.port, open_timeout: 30, read_timeout: ENV.fetch("SUBPIPE_LLAMA_SERVER_TIMEOUT", "180").to_i) do |http|
+        timeout = ENV.fetch("SUBPIPE_LLAMA_SERVER_TIMEOUT", "180").to_i
+        Net::HTTP.start(uri.host, uri.port, open_timeout: 30, read_timeout: timeout) do |http|
           yield(lambda do |pending|
             prompt = build_batch_prompt(pending)
             ids = pending.map { |p| p[:cue]["id"].to_s }
-            content = chat_complete(http, uri, prompt, max_tokens: [128 * pending.size, 256].max)
+            content = chat_complete(http, uri, prompt, max_tokens: [192 * pending.size, 768].max)
             parse_batch_json(content, ids)
           end)
         end
@@ -229,9 +220,8 @@ module Subpipe
       host = "127.0.0.1"
       ngl = ENV.fetch("SUBPIPE_LLAMA_NGL", "99")
       log_path = File.join(Dir.tmpdir, "subpipe-llama-server-#{Process.pid}-#{port}.log")
-      # Room for a small batch of cues + JSON reply.
-      ctx = ENV.fetch("SUBPIPE_ANALYZE_CTX", "4096")
-      parallel = ENV.fetch("SUBPIPE_ANALYZE_PARALLEL", "1")
+      ctx = ENV.fetch("SUBPIPE_LEKTOR_DIRECT_CTX", "4096")
+      parallel = ENV.fetch("SUBPIPE_LEKTOR_DIRECT_PARALLEL", "1")
       cmd = [
         bin,
         "-m", model,
@@ -239,7 +229,7 @@ module Subpipe
         "--port", port.to_s,
         "-c", ctx,
         "-np", parallel,
-        "-n", "512",
+        "-n", "1024",
         "-ngl", ngl
       ]
       warn "Starting #{bin} on #{host}:#{port} (#{File.basename(model)}) …"
@@ -322,7 +312,7 @@ module Subpipe
       nil
     end
 
-    def chat_complete(http, base_uri, user_prompt, max_tokens: 256)
+    def chat_complete(http, base_uri, user_prompt, max_tokens: 512)
       path = "#{base_uri.path}/v1/chat/completions".gsub(%r{//+}, "/")
       path = "/v1/chat/completions" if base_uri.path.nil? || base_uri.path.empty? || base_uri.path == "/"
       body = {
@@ -330,7 +320,7 @@ module Subpipe
           { "role" => "system", "content" => SYSTEM_PROMPT },
           { "role" => "user", "content" => user_prompt }
         ],
-        "temperature" => 0.1,
+        "temperature" => 0.25,
         "max_tokens" => max_tokens,
         "stream" => false
       }
@@ -353,7 +343,7 @@ module Subpipe
     end
 
     def progress_line!(tty, n, total, cue_id, detail)
-      msg = format("analyze %d/%d  %s  %s", n, total, cue_id, detail)
+      msg = format("lektor direct %d/%d  %s  %s", n, total, cue_id, detail)
       if tty
         width = [80, msg.length + 4].max
         $stderr.print "\r#{msg.ljust(width)}"
@@ -365,50 +355,8 @@ module Subpipe
 
     def load_context!(out_dir)
       path = File.join(out_dir, "context.json")
-      Subpipe.abort!("missing #{path}; run merge first") unless File.file?(path)
+      Subpipe.abort!("missing #{path}; run translate first") unless File.file?(path)
       JSON.parse(File.read(path))
-    end
-
-    def resolve_audio!(out_dir, context)
-      rel = context.dig("assets", "audio") || "audio.wav"
-      path = File.join(out_dir, rel)
-      Subpipe.abort!("missing #{path}; run extract first") unless File.file?(path)
-      path
-    end
-
-    def measure_prosody(audio_path, cue)
-      start_ms = cue["start_ms"].to_i
-      end_ms = cue["end_ms"].to_i
-      end_ms = start_ms + 500 if end_ms <= start_ms
-      duration_ms = end_ms - start_ms
-      start_s = start_ms / 1000.0
-      dur_s = [duration_ms / 1000.0, 0.05].max
-
-      cmd = [
-        "ffmpeg", "-hide_banner", "-nostats",
-        "-ss", format("%.3f", start_s),
-        "-t", format("%.3f", dur_s),
-        "-i", audio_path,
-        "-af", "volumedetect",
-        "-f", "null", "-"
-      ]
-      _out, err, status = Open3.capture3(*cmd)
-      mean_db = nil
-      max_db = nil
-      if status.success?
-        err.to_s.each_line do |line|
-          mean_db = Regexp.last_match(1).to_f if line =~ /mean_volume:\s*([-\d.]+)\s*dB/
-          max_db = Regexp.last_match(1).to_f if line =~ /max_volume:\s*([-\d.]+)\s*dB/
-        end
-      else
-        warn "volumedetect failed for #{cue['id']}: #{err.to_s.lines.last}" if ENV["SUBPIPE_VERBOSE"]
-      end
-
-      {
-        "duration_ms" => duration_ms,
-        "mean_db" => mean_db,
-        "max_db" => max_db
-      }
     end
 
     def build_batch_prompt(pending)
@@ -418,67 +366,68 @@ module Subpipe
         next_cue = item[:nxt]
         {
           "id" => cue["id"],
+          "text_pl" => item[:text_pl],
           "text_en" => cue["text_en"],
-          "asr_text" => cue["asr_text"],
-          "prosody" => item[:prosody],
-          "previous" => prev_cue && { "id" => prev_cue["id"], "text_en" => prev_cue["text_en"] },
-          "next" => next_cue && { "id" => next_cue["id"], "text_en" => next_cue["text_en"] }
+          "emotion" => cue["emotion"] || "neutral",
+          "emotion_intensity" => cue["emotion_intensity"].nil? ? 0.3 : cue["emotion_intensity"],
+          "delivery" => cue["delivery"] || "normal",
+          "previous" => prev_cue && {
+            "id" => prev_cue["id"],
+            "text_pl" => prev_cue["text_pl"] || prev_cue["lektor_line"]
+          },
+          "next" => next_cue && {
+            "id" => next_cue["id"],
+            "text_pl" => next_cue["text_pl"] || next_cue["lektor_line"]
+          }
         }.compact
       end
-      payload = { "cues" => cues }
-      "Label emotion and delivery for each cue.\n#{JSON.generate(payload)}"
+      "Rewrite each cue's text_pl for speakable TV-lektor (subtitle = narration).\n#{JSON.generate({ 'cues' => cues })}"
     end
 
-    def apply_result!(cue, result)
-      emotion = result["emotion"].to_s.strip.downcase
-      emotion = "neutral" unless EMOTIONS.include?(emotion)
-      delivery = result["delivery"].to_s.strip.downcase
-      delivery = "normal" unless DELIVERIES.include?(delivery)
-      intensity = result["emotion_intensity"]
-      intensity =
-        begin
-          f = Float(intensity)
-          [[f, 0.0].max, 1.0].min.round(3)
-        rescue ArgumentError, TypeError
-          0.3
-        end
-
-      cue["emotion"] = emotion
-      cue["emotion_intensity"] = intensity
-      cue["delivery"] = delivery
+    def sanitize_line(raw, fallback:)
+      line = raw.to_s.strip
+      line = line.gsub(/\A```(?:json)?\s*/i, "").gsub(/\s*```\z/, "").strip
+      line = line.gsub(/\A["'«»„"]+|["'«»„"]+\z/, "").strip
+      line = fallback.to_s.strip if line.empty?
+      max = Lektor::MAX_CHARS
+      if line.length > max
+        cut = line[0, max]
+        sp = cut.rindex(/\s/)
+        line = (sp && sp > max * 0.6 ? cut[0, sp] : cut).rstrip
+        line = "#{line}…" unless line.end_with?("…", ".", "!", "?")
+      end
+      line
     end
 
     def parse_batch_json(raw, expected_ids)
       text = raw.to_s
-      # Prefer a top-level JSON array of label objects.
+      line_key = lambda { |h| h.is_a?(Hash) && (h.key?("text_pl") || h.key?("lektor_line")) }
       arrays = extract_json_arrays(text)
       parsed_list = arrays.reverse.filter_map do |blob|
         JSON.parse(blob)
       rescue JSON::ParserError
         nil
-      end.find { |a| a.is_a?(Array) && a.any? { |h| h.is_a?(Hash) && h.key?("emotion") } }
+      end.find { |a| a.is_a?(Array) && a.any? { |h| line_key.call(h) } }
 
       unless parsed_list
-        # Fallback: gather individual objects with emotion.
         objects = extract_json_objects(text).filter_map do |blob|
           JSON.parse(blob)
         rescue JSON::ParserError
           nil
-        end.select { |h| h.is_a?(Hash) && h.key?("emotion") }
+        end.select { |h| line_key.call(h) }
         parsed_list = objects unless objects.empty?
       end
 
-      Subpipe.abort!("failed to parse analyze batch JSON\n---\n#{text[0, 2000]}") if parsed_list.nil? || parsed_list.empty?
+      Subpipe.abort!("failed to parse lektor direct batch JSON\n---\n#{text[0, 2000]}") if parsed_list.nil? || parsed_list.empty?
 
       by_id = parsed_list.to_h { |h| [h["id"].to_s, h] }
       expected_ids.map do |id|
         h = by_id[id]
-        # If model omitted ids but returned same length, zip by order.
         if h.nil? && parsed_list.size == expected_ids.size
           h = parsed_list[expected_ids.index(id)]
           h = h.merge("id" => id) if h.is_a?(Hash)
         end
-        Subpipe.abort!("analyze batch missing cue id #{id}") unless h.is_a?(Hash)
+        Subpipe.abort!("lektor direct batch missing cue id #{id}") unless h.is_a?(Hash)
 
         h
       end
@@ -489,38 +438,28 @@ module Subpipe
       i = 0
       while (start = text.index("[", i))
         depth = 0
-        in_str = false
-        escape = false
-        closed = false
-        (start...text.length).each do |j|
-          ch = text[j]
-          if in_str
-            if escape
-              escape = false
-            elsif ch == "\\"
-              escape = true
-            elsif ch == '"'
-              in_str = false
-            end
-            next
-          end
-
-          case ch
-          when '"'
-            in_str = true
-          when "["
+        j = start
+        while j < text.length
+          c = text[j]
+          if c == "["
             depth += 1
-          when "]"
+          elsif c == "]"
             depth -= 1
             if depth.zero?
               arrays << text[start..j]
-              i = j + 1
-              closed = true
               break
             end
+          elsif c == '"'
+            j += 1
+            while j < text.length
+              break if text[j] == '"' && text[j - 1] != "\\"
+
+              j += 1
+            end
           end
+          j += 1
         end
-        i = start + 1 unless closed
+        i = start + 1
       end
       arrays
     end
@@ -530,38 +469,28 @@ module Subpipe
       i = 0
       while (start = text.index("{", i))
         depth = 0
-        in_str = false
-        escape = false
-        closed = false
-        (start...text.length).each do |j|
-          ch = text[j]
-          if in_str
-            if escape
-              escape = false
-            elsif ch == "\\"
-              escape = true
-            elsif ch == '"'
-              in_str = false
-            end
-            next
-          end
-
-          case ch
-          when '"'
-            in_str = true
-          when "{"
+        j = start
+        while j < text.length
+          c = text[j]
+          if c == "{"
             depth += 1
-          when "}"
+          elsif c == "}"
             depth -= 1
             if depth.zero?
               objects << text[start..j]
-              i = j + 1
-              closed = true
               break
             end
+          elsif c == '"'
+            j += 1
+            while j < text.length
+              break if text[j] == '"' && text[j - 1] != "\\"
+
+              j += 1
+            end
           end
+          j += 1
         end
-        i = start + 1 unless closed
+        i = start + 1
       end
       objects
     end

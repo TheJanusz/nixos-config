@@ -26,8 +26,15 @@ require_relative "subpipe/timing"
 require_relative "subpipe/vocab"
 require_relative "subpipe/analyze"
 require_relative "subpipe/translate"
-require_relative "subpipe/review"
+require_relative "subpipe/feedback"
+require_relative "subpipe/mentor_undo"
+require_relative "subpipe/config"
+require_relative "subpipe/mentor"
+require_relative "subpipe/mentor_reflect"
+require_relative "subpipe/mentor_action"
+require_relative "subpipe/diarize"
 require_relative "subpipe/lektor"
+require_relative "subpipe/lektor_direct"
 
 module Subpipe
   # e.g. ass_path("/out", "Show.S01E01", "en") → /out/Show.S01E01.en.ass

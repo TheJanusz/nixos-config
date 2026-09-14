@@ -52,6 +52,20 @@
         ];
         specialArgs = { inherit inputs; };
       };
+      homelab = nixpkgs.lib.nixosSystem {
+      	specialArgs = { inherit system; };
+
+	modules = [
+	  {
+	    nix.package = pkgs.nixVersions.latest;
+	    nixpkgs.overlays = [ overlay-unstable ];
+	  }
+          authentik-nix.nixosModules.default
+	  ./homelab/nixos/configuration.nix
+          agenix.nixosModules.default
+	];
+        specialArgs = { inherit inputs; };
+      };
     };
 
     homeConfigurations."lord" = home-manager.lib.homeManagerConfiguration {

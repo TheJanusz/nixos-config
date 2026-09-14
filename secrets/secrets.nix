@@ -13,4 +13,5 @@ in {
   "wildcard.internal.key.age".publicKeys = [ user1 system1 homelab ];
   "wg-peers.conf.age".publicKeys = [ user1 system1 homelab ];
   "wg-client-privatekey.age".publicKeys = [ user1 system1 homelab ];
+  "nextcloud-postgres-pass.age".publicKeys = [ user1 system1 homelab ];
 }

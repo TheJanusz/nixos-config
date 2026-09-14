@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 let
 in
   {
@@ -55,20 +55,16 @@ in
       }
     '';
     virtualHosts."nextcloud.internal".extraConfig = ''
-      reverse_proxy http://10.100.0.1:7687 {
-        header_up Host {host}
-        header_up X-Forwarded-Proto {scheme}
-      }
+      reverse_proxy http://10.100.0.1:7687
     '';
     virtualHosts."audiobookshelf.internal" = {
       extraConfig = ''
         tls ${config.age.secrets.wildcard-cert.path} ${config.age.secrets.wildcard-key.path}
 
         reverse_proxy http://10.100.0.1:${toString config.services.audiobookshelf.port} {
-          header_up Host {host}
-          header_up X-Forwarded-Proto {scheme}
-          header_up X-Forwarded-For {remote_host}
-          header_up X-Real-IP {remote}
+          header_up X-Forwarded-For {http.request.remote.host}
+          header_up X-Forwarded-Proto {http.request.scheme}
+          header_up X-Forwarded-Host {host}
         }
       '';
     };
@@ -86,6 +82,7 @@ in
   services.dnsmasq = {
     enable = true;
     settings.interface = "wg0";
+    settings.bind-dynamic = true;
     settings.expand-hosts = true;
     settings.domain = "internal";
     settings.listen-address = [ "127.0.0.1" "10.100.0.1" ];
@@ -101,6 +98,70 @@ in
       "/jellyfin.internal/"
       "/nextcloud.internal/"
     ];
+  };
+
+  # services.unbound = {
+  #   enable = true;
+  #
+  #   settings = {
+  #     server = {
+  #       interface = [ "0.0.0.0" ];
+  #
+  #       access-control = [
+  #         "127.0.0.0/8 allow"
+  #         "192.168.1.0/24 allow"
+  #         "10.100.0.0/24 allow"
+  #       ];
+  #       access-control-view = [
+  #         "192.168.1.0/24 lan"
+  #         "10.100.0.0/24 wg"
+  #       ];
+  #     };
+  #
+  #     view = [
+  #       {
+  #         name = "lan";
+  #         view-first = "yes";
+  #
+  #         local-zone = [
+  #           "internal. static"
+  #         ];
+  #
+  #         local-data = lib.mkForce [
+  #           ''"authentik.internal. IN A 192.168.1.69"''
+  #           ''"audiobookshelf.internal. IN A 192.168.1.69"''
+  #           ''"jellyfin.internal. IN A 192.168.1.69"''
+  #           ''"nextcloud.internal. IN A 192.168.1.69"''
+  #         ];
+  #       }
+  #       {
+  #         name = "wg";
+  #         view-first = "yes";
+  #
+  #         local-zone = [
+  #           "internal. static"
+  #         ];
+  #
+  #         local-data = lib.mkForce [
+  #           ''"authentik.internal. IN A 10.100.0.1"''
+  #           ''"audiobookshelf.internal. IN A 10.100.0.1"''
+  #           ''"jellyfin.internal. IN A 10.100.0.1"''
+  #           ''"nextcloud.internal. IN A 10.100.0.1"''
+  #         ];
+  #       }
+  #     ];
+  #   };
+  # };
+
+  # Need to disable this, because it blocks dnsmasq port
+  services.resolved = {
+    enable = true;
+
+    settings = {
+      Resolve = {
+        DNSStubListener = false;
+      };
+    };
   };
 
   security.pki.certificateFiles = [ ../../misc/rootCA.crt ];

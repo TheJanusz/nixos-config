@@ -46,6 +46,26 @@ let
     FLUXER_GATEWAY_MEMORY_RESERVATION=256mb
   '';
 
+  # Homelab Caddy leaves are signed by misc/rootCA.crt. The API image does not
+  # inherit NixOS security.pki, so SSO token/JWKS fetch to authentik.internal
+  # fails with UNABLE_TO_VERIFY_LEAF_SIGNATURE unless Node trusts this CA.
+  rootCA = ../../misc/rootCA.crt;
+  caCertInContainer = "/etc/ssl/certs/homelab-rootCA.crt";
+
+  caOverlay = pkgs.writeText "docker-compose.ca.yml" ''
+    services:
+      api:
+        volumes:
+          - ${rootCA}:${caCertInContainer}:ro
+        environment:
+          NODE_EXTRA_CA_CERTS: ${caCertInContainer}
+      worker:
+        volumes:
+          - ${rootCA}:${caCertInContainer}:ro
+        environment:
+          NODE_EXTRA_CA_CERTS: ${caCertInContainer}
+  '';
+
   uploadsOverlay = pkgs.writeText "docker-compose.uploads.yml" ''
     services:
       seaweedfs:
@@ -54,7 +74,7 @@ let
   '';
 
   extraComposeFlags =
-    lib.optionalString (cfg.uploadsDir != null) " -f ${uploadsOverlay}";
+    " -f ${caOverlay}" + lib.optionalString (cfg.uploadsDir != null) " -f ${uploadsOverlay}";
 
   composeBin = lib.getExe pkgs.docker-compose;
 

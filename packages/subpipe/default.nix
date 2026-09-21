@@ -98,7 +98,7 @@ let
 in
 stdenvNoCC.mkDerivation {
   pname = "subpipe";
-  version = "0.12.1";
+  version = "0.12.2";
 
   src = ./.;
 
@@ -123,14 +123,14 @@ stdenvNoCC.mkDerivation {
     TTS_PY=$(head -1 "$TTS_WRAPPED" | sed 's/^#!//')
     SITE_LIST=$(sed -n 's/.*functools\.reduce(lambda k, p: site\.addsitedir(p, k), \[\(.*\)\],.*/\1/p' "$TTS_WRAPPED")
 
-    cat > $out/bin/subpipe-xtts-worker <<EOF
-    #!$TTS_PY
-    import sys, site, functools, runpy, os
-    os.environ.setdefault("PYTHONNOUSERSITE", "true")
-    functools.reduce(lambda k, p: site.addsitedir(p, k), [$SITE_LIST], site._init_pathinfo())
-    sys.argv[0] = "$out/lib/subpipe/xtts_worker.py"
-    runpy.run_path("$out/lib/subpipe/xtts_worker.py", run_name="__main__")
-    EOF
+    cat > $out/bin/subpipe-xtts-worker <<XTTS_WORKER
+#!$TTS_PY
+import sys, site, functools, runpy, os
+os.environ.setdefault("PYTHONNOUSERSITE", "true")
+functools.reduce(lambda k, p: site.addsitedir(p, k), [$SITE_LIST], site._init_pathinfo())
+sys.argv[0] = "$out/lib/subpipe/xtts_worker.py"
+runpy.run_path("$out/lib/subpipe/xtts_worker.py", run_name="__main__")
+XTTS_WORKER
     chmod +x $out/bin/subpipe-xtts-worker
 
     cp orpheus_cuda_setup.sh $out/lib/subpipe/orpheus_cuda_setup.sh
@@ -138,13 +138,13 @@ stdenvNoCC.mkDerivation {
     chmod +x $out/lib/subpipe/orpheus_cuda_setup.sh $out/lib/subpipe/orpheus_worker.sh
 
     # CPU fallback (Nix torch).
-    cat > $out/bin/subpipe-orpheus-worker-cpu <<EOF
-    #!${orpheusEnv.interpreter}
-    import runpy, os, sys
-    os.environ.setdefault("PYTHONNOUSERSITE", "true")
-    sys.argv[0] = "$out/lib/subpipe/orpheus_worker.py"
-    runpy.run_path("$out/lib/subpipe/orpheus_worker.py", run_name="__main__")
-    EOF
+    cat > $out/bin/subpipe-orpheus-worker-cpu <<ORPHEUS_CPU
+#!${orpheusEnv.interpreter}
+import runpy, os, sys
+os.environ.setdefault("PYTHONNOUSERSITE", "true")
+sys.argv[0] = "$out/lib/subpipe/orpheus_worker.py"
+runpy.run_path("$out/lib/subpipe/orpheus_worker.py", run_name="__main__")
+ORPHEUS_CPU
     chmod +x $out/bin/subpipe-orpheus-worker-cpu
 
     # Prefer CUDA wheel venv when present; else CPU.
@@ -162,9 +162,9 @@ stdenvNoCC.mkDerivation {
     # Shared per-step defaults for store + live (subtitling.nix) wrappers.
     # Future hooks (do not implement here): SUBPIPE_REFLECT_MODEL, SUBPIPE_TTS_ENGINE
     mkdir -p $out/share/subpipe
-    cat > $out/share/subpipe/env.sh <<EOF
+    cat > $out/share/subpipe/env.sh <<ENVEOF
 # subpipe per-step defaults — source then optionally override SUBPIPE_NVIM_RTP / SUBPIPE_BIN
-export PATH=${lib.escapeShellArg toolPath}:$out/bin''${PATH:+:}''$PATH
+export PATH=${lib.escapeShellArg toolPath}:$out/bin\''${PATH:+:}\$PATH
 export SUBPIPE_WHISPER_MODEL=${lib.escapeShellArg whisperModel}
 export SUBPIPE_WHISPER_BIN=${lib.escapeShellArg (lib.getExe' whisperCpp "whisper-cli")}
 export SUBPIPE_TRANSLATE_MODEL=${lib.escapeShellArg translateModel}
@@ -174,9 +174,9 @@ export SUBPIPE_XTTS_WORKER=$out/bin/subpipe-xtts-worker
 export SUBPIPE_ORPHEUS_WORKER=$out/bin/subpipe-orpheus-worker
 export SUBPIPE_ORPHEUS_MODEL=TeeZee/Orpheus-TTS-pl-v2.5
 export SUBPIPE_DIARIZE_WORKER=$out/lib/subpipe/diarize_worker.py
-export SUBPIPE_NVIM_RTP=''${SUBPIPE_NVIM_RTP:-$out/lib/subpipe/nvim/subpipe}
+export SUBPIPE_NVIM_RTP=\''${SUBPIPE_NVIM_RTP:-$out/lib/subpipe/nvim/subpipe}
 export COQUI_TOS_AGREED=1
-EOF
+ENVEOF
 
     makeWrapper ${lib.getExe ruby} $out/bin/subpipe \
       --add-flags "$out/lib/subpipe/cli.rb" \

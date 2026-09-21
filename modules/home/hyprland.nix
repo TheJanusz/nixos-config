@@ -1,80 +1,173 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 let
+  inherit (lib.generators) mkLuaInline;
+  bind = keys: dsp: flags: {
+    _args = [ keys (mkLuaInline dsp) ] ++ lib.optional (flags != { }) flags;
+  };
+  modKey = rest: mkLuaInline ''mod .. " + ${rest}"'';
 in
 {
   home.packages = with pkgs; [
     grimblast # screenshots
   ];
+  # Official TTY launcher starts the watchdog; the raw Hyprland binary warns.
+  home.shellAliases.Hyprland = "start-hyprland";
   programs.kitty.enable = true;
   wayland.windowManager.hyprland.enable = true;
-  wayland.windowManager.hyprland.configType = "hyprlang";
+  wayland.windowManager.hyprland.configType = "lua";
+  wayland.windowManager.hyprland.package = null;
   wayland.windowManager.hyprland.settings = {
-    bind = [
-      "SUPER, F, exec, nautilus"
-      "SUPER, B, exec, brave"
-      "SUPER, RETURN, exec, kitty"
-      "SUPER, W, killactive"
-      "SUPER, M, exec, kitty -e btop"
-      "SUPER, O, exec, obsidian"
-      "SUPER, D, exec, discord"
-      "SUPER, P, exec, bitwarden"
-      "SUPER, R, exec, rofi -show run"
-      # Moving window focus
-      "SUPER, H, movefocus, l"
-      "SUPER, J, movefocus, d"
-      "SUPER, K, movefocus, u"
-      "SUPER, L, movefocus, r"
-      # "SUPER Shift, G, tagwindow, +game"
-      "SUPER Shift, H, movewindow, l"
-      "SUPER Shift, J, movewindow, d"
-      "SUPER Shift, K, movewindow, u"
-      "SUPER Shift, L, movewindow, r"
-      
-      "SUPER Shift, left, workspace, r-1"
-      "SUPER Shift, right, workspace, r+1"
-      "SUPER Shift, Q, movetoworkspace, r-1"
-      "SUPER Shift, E, movetoworkspace, r+1"
-      "SUPER Shift, F, fullscreen"
-      # Screenshots
-      "SUPER Shift, A, exec, grimblast copysave area"
-      "SUPER Shift, W, exec, grimblast copysave active"
-    ];
-    bindle = [
-      ",XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+"
-      ",XF86AudioLowerVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%-"
-    ];
-    bindl = [
-      ",XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_SOURCE@ toggle"
-      ",XF86AudioMute, exec, wpctl set-mute @DEFAULT_SINK@ toggle"
-    ];
-    exec-once = ["waybar"];
-    general = {
-      "col.active_border" = "rgb(0,141,79)";
-      gaps_in = 2;
-      gaps_out = 4;
+    mod = {
+      _var = "SUPER";
     };
-    gesture = [
-      "3, horizontal, workspace"
-    ];
-    input = {
-      kb_layout = "pl";
-      natural_scroll = false;
+    config = {
+      general = {
+        "col.active_border" = "rgb(0,141,79)";
+        gaps_in = 2;
+        gaps_out = 4;
+      };
+      input = {
+        kb_layout = "pl";
+        natural_scroll = false;
+      };
+      decoration = {
+        rounding = 5;
+      };
     };
     monitor = [
-      "HDMI-A-2,3840x2160@60,-1920x0,2"
-      "DP-3, 2560x1440@120,1440x0,1"
-      "DP-4, 2560x1440@60,0x0,1,transform,3"
-      "Unknown-1,disabled"
+      {
+        output = "HDMI-A-2";
+        mode = "3840x2160@60";
+        position = "-1920x0";
+        scale = 2;
+      }
+      {
+        output = "DP-3";
+        mode = "2560x1440@120";
+        position = "1440x0";
+        scale = 1;
+      }
+      {
+        output = "DP-4";
+        mode = "2560x1440@60";
+        position = "0x0";
+        scale = 1;
+        transform = 3;
+      }
+      {
+        output = "Unknown-1";
+        disabled = true;
+      }
     ];
-    decoration = {
-      rounding = 5;
+    gesture = {
+      fingers = 3;
+      direction = "horizontal";
+      action = "workspace";
     };
-    windowrule = [
-      # "opacity 1.0 0.8,class:.+"
-      # "fullscreen, 0, tag:game"
-      # "immediate, tag:game"
+    on = {
+      _args = [
+        "hyprland.start"
+        (mkLuaInline ''
+          function()
+            hl.exec_cmd("waybar")
+          end
+        '')
+      ];
+    };
+    bind = [
+      (bind (modKey "F") ''hl.dsp.exec_cmd("nautilus")'' { })
+      (bind (modKey "B") ''hl.dsp.exec_cmd("brave")'' { })
+      (bind (modKey "RETURN") ''hl.dsp.exec_cmd("kitty")'' { })
+      (bind (modKey "W") "hl.dsp.window.close()" { })
+      (bind (modKey "M") ''hl.dsp.exec_cmd("kitty -e btop")'' { })
+      (bind (modKey "O") ''hl.dsp.exec_cmd("obsidian")'' { })
+      (bind (modKey "D") ''hl.dsp.exec_cmd("discord")'' { })
+      (bind (modKey "P") ''hl.dsp.exec_cmd("bitwarden")'' { })
+      (bind (modKey "R") ''hl.dsp.exec_cmd("rofi -show run")'' { })
+      (bind (modKey "H") ''hl.dsp.focus({ direction = "left" })'' { })
+      (bind (modKey "J") ''hl.dsp.focus({ direction = "down" })'' { })
+      (bind (modKey "K") ''hl.dsp.focus({ direction = "up" })'' { })
+      (bind (modKey "L") ''hl.dsp.focus({ direction = "right" })'' { })
+      (bind (modKey "SHIFT + H") ''hl.dsp.window.move({ direction = "left" })'' { })
+      (bind (modKey "SHIFT + J") ''hl.dsp.window.move({ direction = "down" })'' { })
+      (bind (modKey "SHIFT + K") ''hl.dsp.window.move({ direction = "up" })'' { })
+      (bind (modKey "SHIFT + L") ''hl.dsp.window.move({ direction = "right" })'' { })
+      (bind (modKey "SHIFT + left") ''hl.dsp.focus({ workspace = "r-1" })'' { })
+      (bind (modKey "SHIFT + right") ''hl.dsp.focus({ workspace = "r+1" })'' { })
+      (bind (modKey "SHIFT + Q") ''hl.dsp.window.move({ workspace = "r-1" })'' { })
+      (bind (modKey "SHIFT + E") ''hl.dsp.window.move({ workspace = "r+1" })'' { })
+      (bind (modKey "SHIFT + F") "hl.dsp.window.fullscreen()" { })
+      (bind (modKey "SHIFT + A") ''hl.dsp.exec_cmd("grimblast copysave area")'' { })
+      (bind (modKey "SHIFT + W") ''hl.dsp.exec_cmd("grimblast copysave active")'' { })
+      (bind "XF86AudioRaiseVolume" ''hl.dsp.exec_cmd("wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+")'' {
+        repeating = true;
+        locked = true;
+      })
+      (bind "XF86AudioLowerVolume" ''hl.dsp.exec_cmd("wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%-")'' {
+        repeating = true;
+        locked = true;
+      })
+      (bind "XF86AudioMicMute" ''hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_SOURCE@ toggle")'' {
+        locked = true;
+      })
+      (bind "XF86AudioMute" ''hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_SINK@ toggle")'' {
+        locked = true;
+      })
     ];
   };
 
-  wayland.windowManager.hyprland.plugins = [];
+  wayland.windowManager.hyprland.plugins = [ ];
+
+  # Hyprland only picks lua vs hyprlang at compositor start. A home-manager
+  # switch mid-session drops the old .conf and Hyprland writes an autogenerated
+  # stub (wrong binds, gaps, rounding, border, monitors). Keep a 1:1 hyprlang
+  # copy for that leftover session; the next start-hyprland uses hyprland.lua.
+  xdg.configFile."hypr/hyprland.conf".text = ''
+    bind = SUPER, F, exec, nautilus
+    bind = SUPER, B, exec, brave
+    bind = SUPER, RETURN, exec, kitty
+    bind = SUPER, W, killactive
+    bind = SUPER, M, exec, kitty -e btop
+    bind = SUPER, O, exec, obsidian
+    bind = SUPER, D, exec, discord
+    bind = SUPER, P, exec, bitwarden
+    bind = SUPER, R, exec, rofi -show run
+    bind = SUPER, H, movefocus, l
+    bind = SUPER, J, movefocus, d
+    bind = SUPER, K, movefocus, u
+    bind = SUPER, L, movefocus, r
+    bind = SUPER SHIFT, H, movewindow, l
+    bind = SUPER SHIFT, J, movewindow, d
+    bind = SUPER SHIFT, K, movewindow, u
+    bind = SUPER SHIFT, L, movewindow, r
+    bind = SUPER SHIFT, left, workspace, r-1
+    bind = SUPER SHIFT, right, workspace, r+1
+    bind = SUPER SHIFT, Q, movetoworkspace, r-1
+    bind = SUPER SHIFT, E, movetoworkspace, r+1
+    bind = SUPER SHIFT, F, fullscreen
+    bind = SUPER SHIFT, A, exec, grimblast copysave area
+    bind = SUPER SHIFT, W, exec, grimblast copysave active
+    bindle = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+
+    bindle = ,XF86AudioLowerVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%-
+    bindl = ,XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_SOURCE@ toggle
+    bindl = ,XF86AudioMute, exec, wpctl set-mute @DEFAULT_SINK@ toggle
+    exec-once = waybar
+    general {
+      col.active_border = rgb(0,141,79)
+      gaps_in = 2
+      gaps_out = 4
+    }
+    gesture = 3, horizontal, workspace
+    input {
+      kb_layout = pl
+      natural_scroll = false
+    }
+    monitor = HDMI-A-2,3840x2160@60,-1920x0,2
+    monitor = DP-3,2560x1440@120,1440x0,1
+    monitor = DP-4,2560x1440@60,0x0,1,transform,3
+    monitor = Unknown-1,disabled
+    decoration {
+      rounding = 5
+    }
+  '';
 }

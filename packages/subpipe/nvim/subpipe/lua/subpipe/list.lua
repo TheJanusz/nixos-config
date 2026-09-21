@@ -87,6 +87,7 @@ function M.render(payload, current_id)
   local filter = payload.filter or "?"
   table.insert(lines, string.format("filter=%s  (%d)  pending|edited|clean|flagged", filter, #cues))
   for i, row in ipairs(cues) do
+    -- Known columns only; extra keys (flagged, speaker, visual, …) stay on the row.
     local id = tostring(row.id or "?")
     local en = tostring(row.en or "")
     local pl = tostring(row.pl or "")

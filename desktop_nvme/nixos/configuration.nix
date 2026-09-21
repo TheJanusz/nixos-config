@@ -64,6 +64,9 @@
     withUWSM = true; # recommended for most users
     xwayland.enable = true; # Xwayland can be disabled.
   };
+
+  # Native Wayland for Chromium/Electron (Brave VA-API dma-buf path).
+  environment.sessionVariables.NIXOS_OZONE_WL = "1";
   
   # Configure keymap in X11
   services.xserver.xkb = {

@@ -14,6 +14,10 @@ local S = {
   on_return_focus = nil, -- function() — prefer list browse after field edit
 }
 
+local function valid_parent()
+  return S.win and vim.api.nvim_win_is_valid(S.win)
+end
+
 local function return_focus()
   if S.on_return_focus then
     pcall(S.on_return_focus)
@@ -22,10 +26,6 @@ local function return_focus()
   if valid_parent() then
     pcall(vim.api.nvim_set_current_win, S.win)
   end
-end
-
-local function valid_parent()
-  return S.win and vim.api.nvim_win_is_valid(S.win)
 end
 
 local function close_float()

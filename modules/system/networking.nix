@@ -3,8 +3,8 @@
 let  
 in
 {
-  age.secrets.wg-privatekey = {
-    file = ../../secrets/wg-privatekey.age;
+  age.secrets.wg-client-privatekey = {
+    file = ../../secrets/wg-client-privatekey.age;
     # owner = "systemd-network";
     # group = "systemd-network";
     # mode = "640";
@@ -15,6 +15,9 @@ in
   networking.hostName = "nixos"; # Define your hostname.
   networking.networkmanager.enable = true;
   networking.useNetworkd = true;
+  # SLAAC/RA assigns a global v6 address, but the ISP/router path is dead
+  # (AAAA connect timeouts in abcde/Mojo, ping -6 never leaves). Prefer v4.
+  networking.enableIPv6 = false;
   networking.nameservers = [ "127.0.0.1" "192.168.1.1" "9.9.9.9" ];
   networking.firewall.allowedTCPPorts = [ 80 443 ];
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
@@ -32,79 +35,21 @@ in
 
   systemd.services.systemd-networkd-wait-online.enable = lib.mkForce false;
   networking.wg-quick.interfaces.wg0 = {
-    # address = [ "10.100.0.12/32" ];
+    address = [ "10.100.0.12/32" ];
 
-    privateKeyFile = config.age.secrets.wg-privatekey.path;
+    privateKeyFile = config.age.secrets.wg-client-privatekey.path;
 
-    # dns = [ "10.100.0.1" ];
+    dns = [ "10.100.0.1" ];
 
     peers = [
-        {
-          publicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
-          allowedIPs = [ "10.100.0.1/32" ];
-        }
-        {
-          publicKey = "ZaWx5fsejzyXHGZymPVmel8xbgrxVEL4J/5eTAvEiCs=";
-          allowedIPs = [ "10.100.0.2/32" ];
-        }
-        {
-          publicKey = "95NL8dz+xDNUgmiW6Oc9rMfFguBu9LuiUnDukkFCq2M=";
-          allowedIPs = [ "10.100.0.3/32" ];
-        }
-        {
-          publicKey = "pA2hyTfIGACpDVh23xpP8+9xVzeCJSy7aCaoYqjqnVU=";
-          allowedIPs = [ "10.100.0.4/32" ];
-        }
-        {
-          publicKey = "Q8F6OyfCIh0IP5l3OrdCEYrvlXMw2SP1gJKoks6klHE=";
-          allowedIPs = [ "10.100.0.5/32" ];
-        }
-        # Mama telefon
-        {
-          publicKey = "uFcWY4IrE3/5iPJPfcRbawrWiANapbgs1es5fX8XQAE=";
-          allowedIPs = [ "10.100.0.6/32" ];
-        }
-        # Tata telefon
-        {
-          publicKey = "GkTBoCmS6V6mkRzLUs9VneCwNVcs04PToEBj8x6FzEs=";
-          allowedIPs = [ "10.100.0.7/32" ];
-        }
-        # Tata desktop
-        {
-          publicKey = "45lHqfHfxTlxvcyFQhAMOKmcRmxf3nJD7+IDOBWW9wA=";
-          allowedIPs = [ "10.100.0.8/32" ];
-        }
-        # Mateusz Desktop
-        {
-          publicKey = "k6EkPxQlOshhxdTQMUiCR4mEYb+YShr1ueTAGWg/whA=";
-          allowedIPs = [ "10.100.0.9/32" ];
-        }
-        # Krzysiu laptop
-        {
-          publicKey = "K/O4/UHpSerkJn7SPYdN2pyiZ2rfUL8M9goCjUy6PRo=";
-          allowedIPs = [ "10.100.0.10/32" ];
-        }
-        # Globus telefon
-        {
-          publicKey = "7oZH2qjjG68CE/Jn+uHvR+bedJh/oAUEGX2W4uia8XY=";
-          allowedIPs = [ "10.100.0.11/32" ];
-        }
-        #  Janusz Desktop
-        {
-          publicKey = "e++VPiRBioRZTfiuYEvTOiC+2TrhxRYKt8f6faMfd2M=";
-          allowedIPs = [ "10.100.0.12/32" ];
-        }
-        # Mama laptop
-        {
-          publicKey = "uNagg7MXZv/IuB0T+PzcRHN6PUYkrX+In2m8irGNMRo=";
-          allowedIPs = [ "10.100.0.13/32" ];
-        }
-        # Wiktoria telefon
-        {
-          publicKey = "2QxvGWoK+MukUr6l0iJ+vN/+j7CN6fZEPJE7TPbKOFo=";
-          allowedIPs = [ "10.100.0.14/32" ];
-        }
-      ];
+      {
+        publicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
+
+        allowedIPs = [ "10.100.0.1/32" ];
+
+        endpoint = "95.215.29.152:51820";
+      }
+    ];
   };
   #   {
   #     interface = "wg0";
@@ -131,24 +76,24 @@ in
   #
   #     wireguardPeers = [
   #       {
-  #         publicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
-  #         allowedIPs = [ "10.100.0.1/32" ];
+  #         PublicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
+  #         AllowedIPs = [ "10.100.0.1/32" ];
   #       }
   #       {
-  #         publicKey = "JVFZWH+N7bpc8176K8XvaUoJ7geYafzvS2gmQE5A8y4=";
-  #         allowedIPs = [ "10.100.0.2/32" ];
+  #         PublicKey = "JVFZWH+N7bpc8176K8XvaUoJ7geYafzvS2gmQE5A8y4=";
+  #         AllowedIPs = [ "10.100.0.2/32" ];
   #       }
   #       {
-  #         publicKey = "95NL8dz+xDNUgmiW6Oc9rMfFguBu9LuiUnDukkFCq2M=";
-  #         allowedIPs = [ "10.100.0.3/32" ];
+  #         PublicKey = "95NL8dz+xDNUgmiW6Oc9rMfFguBu9LuiUnDukkFCq2M=";
+  #         AllowedIPs = [ "10.100.0.3/32" ];
   #       }
   #       {
-  #         publicKey = "pA2hyTfIGACpDVh23xpP8+9xVzeCJSy7aCaoYqjqnVU=";
-  #         allowedIPs = [ "10.100.0.4/32" ];
+  #         PublicKey = "pA2hyTfIGACpDVh23xpP8+9xVzeCJSy7aCaoYqjqnVU=";
+  #         AllowedIPs = [ "10.100.0.4/32" ];
   #       }
   #       {
-  #         publicKey = "Q8F6OyfCIh0IP5l3OrdCEYrvlXMw2SP1gJKoks6klHE=";
-  #         allowedIPs = [ "10.100.0.5/32" ];
+  #         PublicKey = "Q8F6OyfCIh0IP5l3OrdCEYrvlXMw2SP1gJKoks6klHE=";
+  #         AllowedIPs = [ "10.100.0.5/32" ];
   #       }
   #     ];
   #     # let
@@ -156,8 +101,8 @@ in
   #     #   peersData = tomlData.peers or [];
   #     # in
   #     # map (peer: {
-  #     #   publicKey = peer.publicKey;
-  #     #   allowedIPs = peer.allowedIPs;
+  #     #   PublicKey = peer.publicKey;
+  #     #   AllowedIPs = peer.allowedIPs;
   #     # }) peersData;
   #
   #   };

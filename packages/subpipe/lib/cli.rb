@@ -400,7 +400,7 @@ when "review"
       Accepts → Show/corrections.jsonl (and voice_takes.jsonl for takes).
     BANNER
     opts.on("-o DIR", "--out DIR", "Episode output directory") { |v| options[:out] = v; options[:out_set] = true }
-    opts.on("--filter MODE", %w[all pending unaccepted edited clean flagged], "Cue filter (default: all)") { |v| options[:filter] = v }
+    opts.on("--filter MODE", %w[all pending edited clean flagged], "Cue filter (default: all)") { |v| options[:filter] = v }
     opts.on("--vocab=PATH", "--vocab PATH", "Show-level vocab.json (relative ok)") { |v| options[:vocab] = v }
     opts.on("-h", "--help", "Show help") { puts opts; exit 0 }
   end.parse!

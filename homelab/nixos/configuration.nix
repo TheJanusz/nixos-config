@@ -148,6 +148,19 @@
     backupDir = "/data/backups/fluxer";
   };
 
+  server.git-server.enable = true;
+
+  # Initrd SSH on :2222 to unlock LUKS (and then ZFS over :22). Generate the
+  # host key on this machine before the first switch:
+  #   sudo mkdir -p /etc/secrets/initrd
+  #   sudo ssh-keygen -t ed25519 -N "" -f /etc/secrets/initrd/ssh_host_ed25519_key
+  ssh-on-boot = {
+    enable = true;
+    authorizedKeys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBvJ56LJONXj+4+WBYzJoo7Ohxl2PPZD5zLNzpAcu9ST pietrzyk.janusz1@gmail.com"
+    ];
+  };
+
   # Open ports in the firewall.
   # networking.firewall.allowedTCPPorts = [ ... ];
   # networking.firewall.allowedUDPPorts = [ ... ];

@@ -9,6 +9,14 @@ in
   programs.brave = {
     enable = true;
     # package = pkgs.brave;
+    # Last --enable-features wins over the nixpkgs wrapper; keep its features plus NVIDIA.
+    commandLineArgs = [
+      "--enable-features=AcceleratedVideoDecodeLinuxGL,AcceleratedVideoEncoder,VaapiOnNvidiaGPUs,VaapiIgnoreDriverChecks,WaylandWindowDecorations,WaylandLinuxDrmSyncobj"
+      "--ignore-gpu-blocklist"
+      "--use-gl=angle"
+      "--use-angle=gl"
+      "--enable-wayland-ime=true"
+    ];
     extensions = [
       { id = "hnmpcagpplmpfojmgmnngilcnanddlhb"; } # Windscribe
       { id = "nngceckbapebfimnlniiiahkandclblb"; } # Bitwarden

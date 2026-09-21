@@ -1,1 +1,5 @@
 .gem/
+.config/
+.cursor/
+result
+

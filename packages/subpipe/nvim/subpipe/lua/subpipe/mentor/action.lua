@@ -180,6 +180,9 @@ function M.run(op, extra)
     state.busy = false
     panel.set_status("failed to start mentor-action")
     panel.flush_queue_if_idle()
+    if S.on_idle then
+      S.on_idle()
+    end
     return
   end
   vim.fn.chansend(job, S.json_encode(payload) .. "\n")

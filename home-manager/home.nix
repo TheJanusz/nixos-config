@@ -80,7 +80,7 @@
     # megacmd
     obsidian # Notetaking
     qownnotes # Alternative notetaking
-    libreoffice-qt6-fresh
+    libreoffice-qt-stable
     nextcloud-client
     rofi # application launcher
     # subtitleedit # Removed because it relies on gtk2
@@ -136,14 +136,6 @@
     #   org.gradle.console=verbose
     #   org.gradle.daemon.idletimeout=3600000
     # '';
-    ".config/vlc/libaacs.so.0" = {
-      source = "${pkgs.makemkv}/lib/libmmbd.so.0";
-      onChange = ''
-        chmod 788 $out
-      '';
-    };
-    ".config/vlc/libbdplus.so.0".source = "${pkgs.makemkv}/lib/libmmbd.so.0";
-    ".config/vlc/libmmbd.so.0".source = "${pkgs.makemkv}/lib/libmmbd.so.0";
   };
 
   # Home Manager can also manage your environment variables through
@@ -164,9 +156,6 @@
   #
   home.sessionVariables = {
     EDITOR = "nvim";
-    LD_LIBRARY_PATH = lib.mkAfter "$HOME/.config/vlc";
-    LIBAACS_PATH = "$HOME/.config/vlc/libaacs.so.0";
-    LIBBDPLUS_PATH = "$HOME/.config/vlc/libbdplus.so.0";
   };
 
   # home.sessionPath = [

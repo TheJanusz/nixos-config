@@ -22,7 +22,7 @@ in
         python3 = pkgs-stable.python3;
       };
 
-      liveRoot = toString ../../packages/subpipe;
+      liveRoot = "${config.home.homeDirectory}/nixos-config/packages/subpipe";
 
       subpipe = pkgs.writeShellScriptBin "subpipe" ''
         set -euo pipefail

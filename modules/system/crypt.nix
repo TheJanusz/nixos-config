@@ -2,6 +2,8 @@
 
 let
 in {
+  imports = [ ./ssh-on-boot.nix ];
+
   programs.gnupg = {
     agent.enable = true;
     agent.enableSSHSupport = true;

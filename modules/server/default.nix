@@ -10,6 +10,7 @@
     ./jellyfin.nix
     ./nextcloud.nix
     ./fluxer.nix
+    ./git-server.nix
     # ./wireguard.nix
   ];
 

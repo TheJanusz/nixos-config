@@ -21,6 +21,11 @@ in
       #   format = "󰖩 {essid}";
       #   format-disconnected = "󰖩 disconnected";
       # };
+      clock = {
+        format = "{:%a, %d %b  %H:%M}";
+        tooltip-format = "{:%A, %d %B %Y}";
+        locale = "pl_PL.UTF-8";
+      };
     }];
   };
 }

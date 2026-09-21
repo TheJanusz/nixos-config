@@ -16,6 +16,7 @@ in
   wayland.windowManager.hyprland.enable = true;
   wayland.windowManager.hyprland.configType = "lua";
   wayland.windowManager.hyprland.package = null;
+  wayland.windowManager.hyprland.portalPackage = null;
   wayland.windowManager.hyprland.settings = {
     mod = {
       _var = "SUPER";
@@ -32,6 +33,11 @@ in
       };
       decoration = {
         rounding = 5;
+      };
+      dwindle = {
+        split_width_multiplier = 1;
+        preserve_split = false;
+        permanent_direction_override = false;
       };
     };
     monitor = [
@@ -169,5 +175,31 @@ in
     decoration {
       rounding = 5
     }
+    dwindle {
+      split_width_multiplier = 1
+      preserve_split = false
+      permanent_direction_override = false
+    }
+  '';
+
+  wayland.windowManager.hyprland.extraConfig = ''
+    -- Equal-height stack for the rotated monitor. Dwindle only ever halves
+    -- the focused window, so three windows become 1/2 + 1/4 + 1/4.
+    hl.layout.register("rows", {
+      recalculate = function(ctx)
+        local n = #ctx.targets
+        if n == 0 then
+          return
+        end
+        for i, target in ipairs(ctx.targets) do
+          target:place(ctx:row(i, n))
+        end
+      end,
+    })
+
+    hl.workspace_rule({
+      workspace = "m[DP-4]",
+      layout = "lua:rows",
+    })
   '';
 }

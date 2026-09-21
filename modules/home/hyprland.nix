@@ -5,6 +5,19 @@ let
     _args = [ keys (mkLuaInline dsp) ] ++ lib.optional (flags != { }) flags;
   };
   modKey = rest: mkLuaInline ''mod .. " + ${rest}"'';
+  # The rows layout treats left/right as up/down. On a portrait monitor,
+  # those keys should cross to the neighboring screen instead.
+  cross = action: direction: mon: ''
+    function()
+      local ws = hl.get_active_workspace()
+      local monitor = ws and ws.monitor
+      if monitor and (monitor.transform % 2 == 1) then
+        hl.dispatch(${action}({ monitor = "${mon}" }))
+      else
+        hl.dispatch(${action}({ direction = "${direction}" }))
+      end
+    end
+  '';
 in
 {
   home.packages = with pkgs; [
@@ -90,18 +103,34 @@ in
       (bind (modKey "D") ''hl.dsp.exec_cmd("discord")'' { })
       (bind (modKey "P") ''hl.dsp.exec_cmd("bitwarden")'' { })
       (bind (modKey "R") ''hl.dsp.exec_cmd("rofi -show run")'' { })
-      (bind (modKey "H") ''hl.dsp.focus({ direction = "left" })'' { })
+      (bind (modKey "H") (cross "hl.dsp.focus" "left" "l") { })
       (bind (modKey "J") ''hl.dsp.focus({ direction = "down" })'' { })
       (bind (modKey "K") ''hl.dsp.focus({ direction = "up" })'' { })
-      (bind (modKey "L") ''hl.dsp.focus({ direction = "right" })'' { })
-      (bind (modKey "SHIFT + H") ''hl.dsp.window.move({ direction = "left" })'' { })
+      (bind (modKey "L") (cross "hl.dsp.focus" "right" "r") { })
+      (bind (modKey "SHIFT + H") ''
+        function()
+          move_workspace_spatial("left")
+        end
+      '' { })
       (bind (modKey "SHIFT + J") ''hl.dsp.window.move({ direction = "down" })'' { })
       (bind (modKey "SHIFT + K") ''hl.dsp.window.move({ direction = "up" })'' { })
-      (bind (modKey "SHIFT + L") ''hl.dsp.window.move({ direction = "right" })'' { })
+      (bind (modKey "SHIFT + L") ''
+        function()
+          move_workspace_spatial("right")
+        end
+      '' { })
       (bind (modKey "SHIFT + left") ''hl.dsp.focus({ workspace = "r-1" })'' { })
       (bind (modKey "SHIFT + right") ''hl.dsp.focus({ workspace = "r+1" })'' { })
-      (bind (modKey "SHIFT + Q") ''hl.dsp.window.move({ workspace = "r-1" })'' { })
-      (bind (modKey "SHIFT + E") ''hl.dsp.window.move({ workspace = "r+1" })'' { })
+      (bind (modKey "SHIFT + Q") ''
+        function()
+          focus_workspace_spatial("left")
+        end
+      '' { })
+      (bind (modKey "SHIFT + E") ''
+        function()
+          focus_workspace_spatial("right")
+        end
+      '' { })
       (bind (modKey "SHIFT + F") "hl.dsp.window.fullscreen()" { })
       (bind (modKey "SHIFT + A") ''hl.dsp.exec_cmd("grimblast copysave area")'' { })
       (bind (modKey "SHIFT + W") ''hl.dsp.exec_cmd("grimblast copysave active")'' { })
@@ -148,8 +177,8 @@ in
     bind = SUPER SHIFT, L, movewindow, r
     bind = SUPER SHIFT, left, workspace, r-1
     bind = SUPER SHIFT, right, workspace, r+1
-    bind = SUPER SHIFT, Q, movetoworkspace, r-1
-    bind = SUPER SHIFT, E, movetoworkspace, r+1
+    bind = SUPER SHIFT, Q, workspace, r-1
+    bind = SUPER SHIFT, E, workspace, r+1
     bind = SUPER SHIFT, F, fullscreen
     bind = SUPER SHIFT, A, exec, grimblast copysave area
     bind = SUPER SHIFT, W, exec, grimblast copysave active
@@ -183,23 +212,6 @@ in
   '';
 
   wayland.windowManager.hyprland.extraConfig = ''
-    -- Equal-height stack for the rotated monitor. Dwindle only ever halves
-    -- the focused window, so three windows become 1/2 + 1/4 + 1/4.
-    hl.layout.register("rows", {
-      recalculate = function(ctx)
-        local n = #ctx.targets
-        if n == 0 then
-          return
-        end
-        for i, target in ipairs(ctx.targets) do
-          target:place(ctx:row(i, n))
-        end
-      end,
-    })
-
-    hl.workspace_rule({
-      workspace = "m[DP-4]",
-      layout = "lua:rows",
-    })
+    dofile("${./hypr-workspace.lua}")
   '';
 }

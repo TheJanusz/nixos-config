@@ -18,10 +18,28 @@ let
       end
     end
   '';
+  # Not in nixpkgs. One MIT Python script; hyprctl comes from the system Hyprland.
+  hypr-session-restore = pkgs.stdenvNoCC.mkDerivation {
+    pname = "hypr-session-restore";
+    version = "0-unstable-2026-06-11";
+    src = pkgs.fetchFromGitHub {
+      owner = "UpayanChatterjee";
+      repo = "hypr-session-restore";
+      rev = "d281be7fb5153e1a656d95263b349b93a7301aa7";
+      hash = "sha256-2CQivm+knWyh+Umv3EEQcs3pFXAwfdlKbdFE/ABqiio=";
+    };
+    dontBuild = true;
+    installPhase = ''
+      install -Dm755 hypr-session-restore $out/bin/hypr-session-restore
+      substituteInPlace $out/bin/hypr-session-restore \
+        --replace-fail '#!/usr/bin/env python3' '#!${pkgs.python3}/bin/python3'
+    '';
+  };
 in
 {
-  home.packages = with pkgs; [
-    grimblast # screenshots
+  home.packages = [
+    pkgs.grimblast # screenshots
+    hypr-session-restore
   ];
   # Official TTY launcher starts the watchdog; the raw Hyprland binary warns.
   home.shellAliases.Hyprland = "start-hyprland";
@@ -89,6 +107,8 @@ in
         (mkLuaInline ''
           function()
             hl.exec_cmd("waybar")
+            hl.exec_cmd("sh -c 'sleep 2 && hypr-session-restore restore'")
+            hl.exec_cmd("sh -c 'pgrep -f \"[h]ypr-session-restore daemon\" >/dev/null || hypr-session-restore daemon'")
           end
         '')
       ];

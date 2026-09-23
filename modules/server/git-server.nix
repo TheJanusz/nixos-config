@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -44,6 +45,18 @@ in
     ];
 
     services.openssh.settings.AllowUsers = [ "git" ];
+    # SHA-256 remotes need protocol v2; sshd drops GIT_PROTOCOL unless allowed.
+    # Forgejo: Match User git / AcceptEnv GIT_PROTOCOL (host OpenSSH, not built-in).
+    services.openssh.settings.AcceptEnv = [ "GIT_PROTOCOL" ];
+    services.openssh.extraConfig = ''
+      Match User git
+        AcceptEnv GIT_PROTOCOL
+        SetEnv PATH=${lib.makeBinPath [ pkgs.git ]}:/run/current-system/sw/bin
+    '';
+
+    # Host SSH (forgejo serv) does not inherit forgejo.service's PATH.
+    environment.systemPackages = [ pkgs.git ];
+    programs.git.enable = true;
 
     services.forgejo = {
       enable = true;

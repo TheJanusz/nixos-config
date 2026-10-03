@@ -117,6 +117,7 @@ stdenvNoCC.mkDerivation {
     cp diarize_worker.py $out/lib/subpipe/diarize_worker.py
     mkdir -p $out/lib/subpipe/patches
     cp -r patches/. $out/lib/subpipe/patches/
+    cp ${../../lib/whisper_cli.rb} $out/lib/subpipe/whisper_cli.rb
 
     # Reuse coqui-tts Python + site-packages bootstrap (same as `tts` CLI).
     TTS_WRAPPED=${tts}/bin/.tts-wrapped

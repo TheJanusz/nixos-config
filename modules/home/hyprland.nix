@@ -5,19 +5,13 @@ let
     _args = [ keys (mkLuaInline dsp) ] ++ lib.optional (flags != { }) flags;
   };
   modKey = rest: mkLuaInline ''mod .. " + ${rest}"'';
-  # The rows layout treats left/right as up/down. On a portrait monitor,
-  # those keys should cross to the neighboring screen instead.
-  cross = action: direction: mon: ''
-    function()
-      local ws = hl.get_active_workspace()
-      local monitor = ws and ws.monitor
-      if monitor and (monitor.transform % 2 == 1) then
-        hl.dispatch(${action}({ monitor = "${mon}" }))
-      else
-        hl.dispatch(${action}({ direction = "${direction}" }))
-      end
-    end
-  '';
+  # BSD-3 Lua package. Gives each monitor a fixed workspace range.
+  split-monitor-workspaces = pkgs.fetchFromGitHub {
+    owner = "zjeffer";
+    repo = "split-monitor-workspaces";
+    rev = "d6b45cdb9b30c388bc4ded4adad78a14e523d591";
+    hash = "sha256-AIg6hxip9hP6XWIqpjQOIripCdJQvtKSEubV+qL8mF8=";
+  };
   # Not in nixpkgs. One MIT Python script; hyprctl comes from the system Hyprland.
   hypr-session-restore = pkgs.stdenvNoCC.mkDerivation {
     pname = "hypr-session-restore";
@@ -70,6 +64,12 @@ in
         preserve_split = false;
         permanent_direction_override = false;
       };
+      binds = {
+        window_direction_monitor_fallback = true;
+      };
+      gestures = {
+        workspace_swipe_create_new = false;
+      };
     };
     monitor = [
       {
@@ -96,17 +96,12 @@ in
         disabled = true;
       }
     ];
-    gesture = {
-      fingers = 3;
-      direction = "horizontal";
-      action = "workspace";
-    };
     on = {
       _args = [
         "hyprland.start"
         (mkLuaInline ''
           function()
-            hl.exec_cmd("waybar")
+            hl.exec_cmd("${lib.getExe config.programs.waybar.package}")
             hl.exec_cmd("sh -c 'sleep 2 && hypr-session-restore restore'")
             hl.exec_cmd("sh -c 'pgrep -f \"[h]ypr-session-restore daemon\" >/dev/null || hypr-session-restore daemon'")
           end
@@ -123,32 +118,32 @@ in
       (bind (modKey "D") ''hl.dsp.exec_cmd("discord")'' { })
       (bind (modKey "P") ''hl.dsp.exec_cmd("bitwarden")'' { })
       (bind (modKey "R") ''hl.dsp.exec_cmd("rofi -show run")'' { })
-      (bind (modKey "H") (cross "hl.dsp.focus" "left" "l") { })
+      (bind (modKey "H") ''hl.dsp.focus({ direction = "left" })'' { })
       (bind (modKey "J") ''hl.dsp.focus({ direction = "down" })'' { })
       (bind (modKey "K") ''hl.dsp.focus({ direction = "up" })'' { })
-      (bind (modKey "L") (cross "hl.dsp.focus" "right" "r") { })
-      (bind (modKey "SHIFT + H") ''
-        function()
-          move_workspace_spatial("left")
-        end
-      '' { })
+      (bind (modKey "L") ''hl.dsp.focus({ direction = "right" })'' { })
+      (bind (modKey "SHIFT + H") ''hl.dsp.window.move({ direction = "left" })'' { })
       (bind (modKey "SHIFT + J") ''hl.dsp.window.move({ direction = "down" })'' { })
       (bind (modKey "SHIFT + K") ''hl.dsp.window.move({ direction = "up" })'' { })
-      (bind (modKey "SHIFT + L") ''
+      (bind (modKey "SHIFT + L") ''hl.dsp.window.move({ direction = "right" })'' { })
+      (bind (modKey "SHIFT + left") ''
         function()
-          move_workspace_spatial("right")
+          smw.workspace("-1")()
         end
       '' { })
-      (bind (modKey "SHIFT + left") ''hl.dsp.focus({ workspace = "r-1" })'' { })
-      (bind (modKey "SHIFT + right") ''hl.dsp.focus({ workspace = "r+1" })'' { })
+      (bind (modKey "SHIFT + right") ''
+        function()
+          smw.workspace("+1")()
+        end
+      '' { })
       (bind (modKey "SHIFT + Q") ''
         function()
-          focus_workspace_spatial("left")
+          smw.workspace("-1")()
         end
       '' { })
       (bind (modKey "SHIFT + E") ''
         function()
-          focus_workspace_spatial("right")
+          smw.workspace("+1")()
         end
       '' { })
       (bind (modKey "SHIFT + F") "hl.dsp.window.fullscreen()" { })
@@ -195,10 +190,10 @@ in
     bind = SUPER SHIFT, J, movewindow, d
     bind = SUPER SHIFT, K, movewindow, u
     bind = SUPER SHIFT, L, movewindow, r
-    bind = SUPER SHIFT, left, workspace, r-1
-    bind = SUPER SHIFT, right, workspace, r+1
-    bind = SUPER SHIFT, Q, workspace, r-1
-    bind = SUPER SHIFT, E, workspace, r+1
+    bind = SUPER SHIFT, left, workspace, m-1
+    bind = SUPER SHIFT, right, workspace, m+1
+    bind = SUPER SHIFT, Q, workspace, m-1
+    bind = SUPER SHIFT, E, workspace, m+1
     bind = SUPER SHIFT, F, fullscreen
     bind = SUPER SHIFT, A, exec, grimblast copysave area
     bind = SUPER SHIFT, W, exec, grimblast copysave active
@@ -212,7 +207,12 @@ in
       gaps_in = 2
       gaps_out = 4
     }
-    gesture = 3, horizontal, workspace
+    binds {
+      window_direction_monitor_fallback = true
+    }
+    gestures {
+      workspace_swipe_create_new = false
+    }
     input {
       kb_layout = pl
       natural_scroll = false
@@ -232,6 +232,7 @@ in
   '';
 
   wayland.windowManager.hyprland.extraConfig = ''
+    package.path = "${split-monitor-workspaces}/lua/?.lua;" .. package.path
     dofile("${./hypr-workspace.lua}")
   '';
 }

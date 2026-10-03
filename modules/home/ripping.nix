@@ -88,6 +88,7 @@ in
     makemkv
     mkvtoolnix # Mostly for editing chapter info. Also ripping problematic titles from badly authored dvds
     picard # Adding stuff to MusicBrainz
+    redumper # better backing up of cds
     yt-dlp # Downloading stuff from video sites
   ];
 }

@@ -148,6 +148,9 @@
     backupDir = "/data/backups/fluxer";
   };
 
+  server.jellyfin.enable = true;
+  server.seerr.enable = true;
+
   server.git-server.enable = true;
 
   # Initrd SSH on :2222 to unlock LUKS (and then ZFS over :22). Generate the

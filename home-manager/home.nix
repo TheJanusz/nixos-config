@@ -63,6 +63,20 @@
   home.packages = with pkgs; [
     (writeScriptBin "split-cue" (builtins.readFile ../bin/split.rb))
     (writeScriptBin "shift-track-numbers" (builtins.readFile ../bin/shift-track-numbers.rb))
+    (writeShellScriptBin "chapters" ''
+      # Live checkout so lib/whisper_cli.rb stays shared. If `subpipe` is installed,
+      # borrow its env.sh (whisper-cli + SUBPIPE_WHISPER_MODEL) without a separate package.
+      sp=$(command -v subpipe || true)
+      if [ -n "$sp" ] && [ -f "$sp" ]; then
+        envsh=$(sed -n 's/^source //p' "$sp" | head -1)
+        if [ -n "$envsh" ] && [ -f "$envsh" ]; then
+          # shellcheck disable=SC1090
+          source "$envsh"
+        fi
+      fi
+      exec ${ruby_4_0}/bin/ruby -I ${config.home.homeDirectory}/nixos-config/lib \
+        ${config.home.homeDirectory}/nixos-config/bin/chapters.rb "$@"
+    '')
     # bitwarden-desktop
 
     # Game dev
@@ -156,6 +170,7 @@
   #
   home.sessionVariables = {
     EDITOR = "nvim";
+    TERMINAL = "kitty";
   };
 
   # home.sessionPath = [
@@ -173,6 +188,7 @@
     ../modules/home/communication.nix
     ../modules/home/git.nix
     ../modules/home/hyprland.nix
+    ../modules/home/mime.nix
     ../modules/home/nvim.nix
     ../modules/home/ripping.nix
     ../modules/home/subtitling.nix

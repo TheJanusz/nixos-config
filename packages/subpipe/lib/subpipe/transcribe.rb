@@ -6,6 +6,17 @@ require "open3"
 require_relative "vocab"
 require_relative "metrics"
 
+def load_whisper_cli!
+  return if defined?(WhisperCli)
+
+  begin
+    require_relative "whisper_cli"
+  rescue LoadError
+    require File.expand_path("../../../../lib/whisper_cli", __dir__)
+  end
+end
+load_whisper_cli!
+
 module Subpipe
   module Transcribe
     module_function
@@ -15,11 +26,6 @@ module Subpipe
       audio = File.join(out_dir, "audio.wav")
       Subpipe.abort!("missing #{audio}; run extract first") unless File.file?(audio)
 
-      model ||= ENV["SUBPIPE_WHISPER_MODEL"]
-      Subpipe.abort!("no whisper model; set SUBPIPE_WHISPER_MODEL") if model.nil? || model.empty?
-      Subpipe.abort!("model not found: #{model}") unless File.file?(model)
-
-      whisper = ENV.fetch("SUBPIPE_WHISPER_BIN", "whisper-cli")
       prefix = File.join(out_dir, "whisper")
 
       extract = load_extract(out_dir)
@@ -37,28 +43,20 @@ module Subpipe
       prompt = Vocab.whisper_prompt(terms)
       warn "Vocab files: #{vocab_files.join(', ')}" unless vocab_files.empty?
 
-      cmd = [
-        whisper,
-        "-m", model,
-        "-f", audio,
-        "-l", language,
-        "-oj",
-        "-ojf",
-        "-of", prefix
-      ]
-      if prompt
-        cmd += ["--prompt", prompt, "--carry-initial-prompt"]
-        warn "Whisper vocab prompt: #{prompt}"
+      warn "Whisper vocab prompt: #{prompt}" if prompt && !prompt.to_s.empty?
+      result = begin
+        WhisperCli.transcribe(
+          audio,
+          language: language,
+          model: model,
+          prompt: prompt,
+          out_prefix: prefix
+        )
+      rescue WhisperCli::Error => e
+        Subpipe.abort!(e.message)
       end
-
-      warn "Running: #{cmd.join(' ')}"
-      infer_t0 = Metrics.monotonic
-      ok = system(*cmd)
-      infer_s = Metrics.monotonic - infer_t0
-      Subpipe.abort!("whisper-cli failed") unless ok
-
-      json_path = "#{prefix}.json"
-      Subpipe.abort!("expected #{json_path}") unless File.file?(json_path)
+      infer_s = result.elapsed_s
+      json_path = result.json_path
       puts "Transcription → #{json_path}"
 
       total_s = Metrics.monotonic - t0

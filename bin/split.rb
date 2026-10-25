@@ -23,6 +23,7 @@ module Bugfix
 end
 
 using Bugfix
+
 cue_file = ARGV[0] || 'file.cue'
 cuesheet = RubyCue::Cuesheet.new(File.read(cue_file))
 cuesheet.parse!
@@ -33,7 +34,7 @@ raise "Audio file not found" unless File.exist?(audio_file)
 
 # Process tracks
 # The first one has start_time 00:00:00 so not necessary for splitting
-start_times = cuesheet.songs[1..].map { it[:index].to_f }
+start_times = cuesheet.songs[1..].map { |song| song[:index].to_f }
 
 cmd = "ffmpeg -i \"#{audio_file}\""
 cmd += " -f segment -segment_times \"#{start_times.join(',')}\""
@@ -62,7 +63,7 @@ output_files.each_with_index do |file, index|
     tag.track = index + 1
 
     cover_filename = File.basename(cuesheet.file, ".*") + ".jpeg"
-    cover = File.open(cover_filename, 'rb') { it.read }
+    cover = File.open(cover_filename, 'rb') { |io| io.read }
     apic = TagLib::ID3v2::AttachedPictureFrame.new
     apic.mime_type = 'image/jpeg' # TODO: Get this dynamically from the file itself maybe in case they change formats
     apic.type = TagLib::ID3v2::AttachedPictureFrame::FrontCover
@@ -71,9 +72,9 @@ output_files.each_with_index do |file, index|
     tag.add_frame(apic)
     f.save
 
-    extension = File.extname(file)
-    new_filename = "#{cuesheet.songs.dig(index, :title)}#{extension}"
-    safe_name = new_filename.gsub(/[\/\\:*?"<>|]/, "_")
+    output_extension = File.extname(file)
+    new_safe_filename = "#{cuesheet.songs.dig(index, :title)}#{output_extension}"
+    safe_name = new_safe_filename.gsub(/[\/\\:*?"<>|]/, "_")
     File.rename(file, safe_name)
   end
 end

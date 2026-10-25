@@ -4,7 +4,7 @@ let
   vaapiInGraphics = builtins.filter (p: (p.pname or "") == "nvidia-vaapi-driver") config.hardware.graphics.extraPackages;
 in
 {
-  multipleAllowedUnfreePredicate = [ "nvidia-x11" "nvidia-settings" "cuda-merged" "cuda_cuobjdump" "cuda_gdb" "cuda_nvcc" "cuda_nvdisasm" "cuda_nvprune" "cuda_cccl" "cuda_cudart" "cuda_cupti" "cuda_cuxxfilt" "cuda_nvml_dev" "cuda_nvrtc" "cuda_nvtx" "cuda_profiler_api" "cuda_sanitizer_api" "libcublas" "libcufft" "libcurand" "libcusolver" "libnvjitlink" "libcusparse" "libnpp" ];
+  multipleAllowedUnfreePredicate = [ "nvidia-x11" "nvidia-settings" "cuda-merged" "cuda_cuobjdump" "cuda_gdb" "cuda_nvcc" "cuda_nvdisasm" "cuda_nvprune" "cuda_cccl" "cccl" "cuda_cudart" "cuda_cupti" "cuda_cuxxfilt" "cuda_nvml_dev" "cuda_nvrtc" "cuda_nvtx" "cuda_profiler_api" "cuda_sanitizer_api" "libcublas" "libcufft" "libcurand" "libcusolver" "libnvjitlink" "libcusparse" "libnpp" ];
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.graphics.enable = true;
   hardware.keyboard.zsa.enable = true;

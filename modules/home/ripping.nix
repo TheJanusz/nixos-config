@@ -84,6 +84,10 @@ in
     ddrescue # backing up damaged discs
     (callPackage ../../packages/discflat { }) # photo → square transparent disc PNG
     ffmpeg-full
+    (writeShellScriptBin "expand-stills" ''
+      export FFMPEG=${ffmpeg-full}/bin/ffmpeg
+      exec bash ${../../bin/expand-stills.sh} "$@"
+    '')
     customvlc
     makemkv
     mkvtoolnix # Mostly for editing chapter info. Also ripping problematic titles from badly authored dvds

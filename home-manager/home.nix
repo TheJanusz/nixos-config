@@ -15,7 +15,14 @@
   # release notes.
   home.stateVersion = "25.11"; # Please read the comment before changing.
 
-  nixpkgs.config.allowUnfreePredicate = pkg:
+  # Home Manager reimports nixpkgs from nixpkgs.config, and this
+  # definition overrides the package set passed in from the flake.
+  # RTX 3080 is compute capability 8.6. The default list also builds
+  # 7.5 through 12.1, which filled the disk during the CUDA build.
+  nixpkgs.config = {
+    cudaCapabilities = [ "8.6" ];
+    cudaForwardCompat = false;
+    allowUnfreePredicate = pkg:
     let
       name = lib.getName pkg;
     in
@@ -31,21 +38,56 @@
       "cudatoolkit"
       "cudnn"
       "nccl"
+      "cccl"
     ]
     || lib.hasPrefix "cuda" name
     || lib.hasPrefix "libcu" name
     || lib.hasPrefix "libnv" name
     || lib.hasPrefix "cudnn" name;
-
-  programs.yazi = {
-    enable = true;
-    shellWrapperName = "y";
-    settings.yazi = {
-      opener.edit = [
-        { run = "nvim \"$@\""; block = true; }
-      ];
-    };
   };
+
+  programs.yazi =
+    let
+      # Duration in the file list. Yazi 26.9.1 requires a fetcher `group`;
+      # the plugin README's `id` field is no longer read.
+      ffmpeg-stats = pkgs.stdenvNoCC.mkDerivation {
+        pname = "ffmpeg-stats.yazi";
+        version = "0-unstable-2026-09-02";
+        src = pkgs.fetchFromGitHub {
+          owner = "grimandgreedy";
+          repo = "ffmpeg-stats.yazi";
+          rev = "d982bc737581d8fe8f1d254db9c15fcbe801017b";
+          hash = "sha256-HCCqzukHLtDujvESxNDNpP1EFRgSSKWibOeQN/OWsOA=";
+        };
+        dontBuild = true;
+        installPhase = ''
+          runHook preInstall
+          cp -r . $out
+          runHook postInstall
+        '';
+      };
+    in
+    {
+      enable = true;
+      shellWrapperName = "y";
+      plugins.ffmpeg-stats = {
+        package = ffmpeg-stats;
+        setup = true;
+        settings.duration = true;
+      };
+      settings = {
+        opener.edit = [
+          { run = "nvim %s"; block = true; }
+        ];
+        plugin.prepend_fetchers = [
+          {
+            url = "*";
+            run = "ffmpeg-stats";
+            group = "ffmpeg-stats";
+          }
+        ];
+      };
+    };
 
   programs.devenv = {
     enable = true;
@@ -107,6 +149,9 @@
     gimp
     inkscape
     rizin # decompilation / binary analysis
+    ghidra-bin
+    rizinPlugins.rz-ghidra
+    scanmem
     # ares-cli # WebOS management
     libxml2 # Just for xmllint
     zlib

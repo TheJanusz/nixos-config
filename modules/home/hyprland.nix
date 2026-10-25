@@ -29,6 +29,57 @@ let
         --replace-fail '#!/usr/bin/env python3' '#!${pkgs.python3}/bin/python3'
     '';
   };
+  # X11 games read the XWayland primary before their window exists. Hyprland
+  # drops that flag on startup and when monitors wake, so keep DP-3 primary.
+  xwayland-primary = pkgs.writeShellScriptBin "xwayland-primary-dp3" ''
+    ${pkgs.python3}/bin/python3 - <<'PY'
+    import os, socket, subprocess, time
+
+    xrandr = "${pkgs.xrandr}/bin/xrandr"
+
+    def set_primary():
+        subprocess.run([xrandr, "--output", "DP-3", "--primary"], check=False)
+
+    def dp3_connected():
+        try:
+            out = subprocess.check_output([xrandr, "--query"], text=True, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.CalledProcessError):
+            return False
+        return any(line.startswith("DP-3 connected") for line in out.splitlines())
+
+    for _ in range(60):
+        if dp3_connected():
+            set_primary()
+            break
+        time.sleep(1)
+
+    def events():
+        signature = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+        runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+        path = f"{runtime}/hypr/{signature}/.socket2.sock"
+        while True:
+            try:
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.connect(path)
+                buf = b""
+                while True:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    while b"\n" in buf:
+                        line, buf = buf.split(b"\n", 1)
+                        if line.startswith(b"monitoradded"):
+                            set_primary()
+            except OSError:
+                time.sleep(2)
+
+    import threading
+    threading.Thread(target=events, daemon=True).start() while True:
+        time.sleep(30)
+        set_primary()
+    PY
+  '';
 in
 {
   home.packages = [
@@ -104,6 +155,7 @@ in
             hl.exec_cmd("${lib.getExe config.programs.waybar.package}")
             hl.exec_cmd("sh -c 'sleep 2 && hypr-session-restore restore'")
             hl.exec_cmd("sh -c 'pgrep -f \"[h]ypr-session-restore daemon\" >/dev/null || hypr-session-restore daemon'")
+            hl.exec_cmd("sh -c 'pgrep -f \"[x]wayland-primary-dp3\" >/dev/null || ${lib.getExe xwayland-primary}'")
           end
         '')
       ];
@@ -122,10 +174,18 @@ in
       (bind (modKey "J") ''hl.dsp.focus({ direction = "down" })'' { })
       (bind (modKey "K") ''hl.dsp.focus({ direction = "up" })'' { })
       (bind (modKey "L") ''hl.dsp.focus({ direction = "right" })'' { })
-      (bind (modKey "SHIFT + H") ''hl.dsp.window.move({ direction = "left" })'' { })
+      (bind (modKey "SHIFT + H") ''
+        function()
+          move_window("left")
+        end
+      '' { })
       (bind (modKey "SHIFT + J") ''hl.dsp.window.move({ direction = "down" })'' { })
       (bind (modKey "SHIFT + K") ''hl.dsp.window.move({ direction = "up" })'' { })
-      (bind (modKey "SHIFT + L") ''hl.dsp.window.move({ direction = "right" })'' { })
+      (bind (modKey "SHIFT + L") ''
+        function()
+          move_window("right")
+        end
+      '' { })
       (bind (modKey "SHIFT + left") ''
         function()
           smw.workspace("-1")()
@@ -146,7 +206,7 @@ in
           smw.workspace("+1")()
         end
       '' { })
-      (bind (modKey "SHIFT + F") "hl.dsp.window.fullscreen()" { })
+      (bind (modKey "SHIFT + F") ''hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" })'' { })
       (bind (modKey "SHIFT + A") ''hl.dsp.exec_cmd("grimblast copysave area")'' { })
       (bind (modKey "SHIFT + W") ''hl.dsp.exec_cmd("grimblast copysave active")'' { })
       (bind "XF86AudioRaiseVolume" ''hl.dsp.exec_cmd("wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+")'' {
@@ -194,7 +254,7 @@ in
     bind = SUPER SHIFT, right, workspace, m+1
     bind = SUPER SHIFT, Q, workspace, m-1
     bind = SUPER SHIFT, E, workspace, m+1
-    bind = SUPER SHIFT, F, fullscreen
+    bind = SUPER SHIFT, F, fullscreen, 1
     bind = SUPER SHIFT, A, exec, grimblast copysave area
     bind = SUPER SHIFT, W, exec, grimblast copysave active
     bindle = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+
@@ -202,6 +262,7 @@ in
     bindl = ,XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_SOURCE@ toggle
     bindl = ,XF86AudioMute, exec, wpctl set-mute @DEFAULT_SINK@ toggle
     exec-once = waybar
+    exec-once = sh -c 'pgrep -f "[x]wayland-primary-dp3" >/dev/null || ${lib.getExe xwayland-primary}'
     general {
       col.active_border = rgb(0,141,79)
       gaps_in = 2

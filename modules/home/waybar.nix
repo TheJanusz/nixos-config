@@ -19,6 +19,7 @@ let
   });
 in
 {
+  home.packages = [ pkgs.pwvucontrol ];
   programs.waybar = {
     enable = true;
     package = waybar;
@@ -45,6 +46,9 @@ in
       #   format = "󰖩 {essid}";
       #   format-disconnected = "󰖩 disconnected";
       # };
+      pulseaudio = {
+        on-click = "pwvucontrol";
+      };
       clock = {
         format = "{:%a, %d %b  %H:%M}";
         tooltip-format = "{:%A, %d %B %Y}";

@@ -35,6 +35,20 @@
         allowUnfree = true;
       };
     };
+    # Rails 8.1.4 is not in nixpkgs (that set is still 7.2). Lockfile lives in devshell/rails.
+    railsGems = pkgs.bundlerEnv {
+      name = "workshop-rails";
+      ruby = pkgs.ruby_4_0;
+      gemdir = ./devshell/rails;
+      gemConfig = pkgs.defaultGemConfig;
+    };
+    rails = pkgs.writeShellScriptBin "rails" ''
+      export GEM_PATH="${railsGems}/${pkgs.ruby_4_0.gemPath}"
+      unset GEM_HOME
+      unset BUNDLE_GEMFILE
+      unset BUNDLE_PATH
+      exec ${pkgs.ruby_4_0}/bin/ruby ${railsGems.gems.railties}/bin/rails "$@"
+    '';
   in
   {
     nixosConfigurations = {
@@ -84,39 +98,25 @@
       # to pass through arguments to home.nix
     };
 
-    # devShells.${system}.default = pkgs.mkShell {
-    #   buildInputs = with pkgs; [
-    #     ruby_4_0
-    #     gcc
-    #     gnumake
-    #     pkg-config
-    #     zlib
-    #     openssl
-    #     libyaml
-    #     gmp
-    #     readline
-    #     rustc
-    #     fish
-    #   ];
-    #   nativeBuildInputs = [ pkgs.pkg-config ];
-    #   env = { SHELL = "${pkgs.fish}/bin/fish"; };
-    #   shellHook = ''
-    #         exec fish -C '
-    #         set -gx GEM_HOME $PWD/.gem
-    #         set -gx PATH $GEM_HOME/bin $PATH
-    #         bundle config set path $GEM_HOME
-    #         if not type -q rails
-    #         echo "Rails not found. Installing Rails..."
-    #         gem install rails
-    #         end
-    #         if not test -d "$GEM_HOME/gems"
-    #         echo "Installing Ruby gems..."
-    #         bundle install
-    #         end
-    #         echo "Ruby version: $(ruby --version)"
-    #         echo "Rails version: $(rails --version)"
-    #         '
-    #   '';
-    # };
+    # Workshop shell for scaffolding an app, then leaving it.
+    # Run from the directory that should contain the app:
+    #   nix develop ~/nixos-config
+    #   rails --version   # Rails 8.1.4
+    #   rails new myapp --skip-bundle
+    #   exit
+    #   cd myapp && devenv init
+    # --skip-bundle stays: this Ruby cannot install the new app's gems.
+    # Rails 8.1 writes .ruby-version from this Ruby (4.0.7). In the new
+    # project's devenv.nix:
+    #   languages.ruby.enable = true;
+    #   languages.ruby.versionFile = ./.ruby-version;
+    # That devenv owns Bundler, native gems, and services.
+    # The rails wrapper sets GEM_PATH for that process only.
+    devShells.${system}.default = pkgs.mkShell {
+      packages = [
+        rails
+        pkgs.devenv
+      ];
+    };
   };
 }

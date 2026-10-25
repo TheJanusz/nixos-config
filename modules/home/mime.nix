@@ -16,6 +16,11 @@
 
       "audio/*" = "vlc.desktop";
       "video/*" = "vlc.desktop";
+      # Magic sniffing reports the old names. Those are not covered by the
+      # video/* expansion, and mkvtoolnix-gui is first in the cache for them.
+      "audio/x-matroska" = "vlc.desktop";
+      "video/x-matroska" = "vlc.desktop";
+      "video/x-matroska-3d" = "vlc.desktop";
       "application/pdf" = "brave-browser.desktop";
 
       "inode/directory" = "org.gnome.Nautilus.desktop";

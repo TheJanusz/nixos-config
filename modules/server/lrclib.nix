@@ -20,7 +20,10 @@ let
   stateDir = "/var/lib/lrclib";
   database = "${stateDir}/db.sqlite3";
 
-  composeBin = lib.getExe pkgs.docker-compose;
+  # pkgs.docker's wrapper puts buildx on DOCKER_CLI_PLUGIN_DIRS. The raw
+  # docker-compose binary does not, so Compose falls back to the classic
+  # builder and rejects the Dockerfile's RUN --mount lines.
+  dockerBin = lib.getExe pkgs.docker;
 
   composeFile = pkgs.writeText "lrclib-compose.yml" ''
     services:
@@ -42,7 +45,8 @@ let
 
   lrclibCompose = pkgs.writeShellScript "lrclib-compose" ''
     set -euo pipefail
-    exec ${composeBin} \
+    export DOCKER_BUILDKIT=1
+    exec ${dockerBin} compose \
       --project-directory ${stateDir} \
       --project-name lrclib \
       -f ${composeFile} \

@@ -100,9 +100,26 @@
     package = pkgs.jdk11;
   };
 
+  nixpkgs.overlays = [
+    (final: prev: {
+      cursor-cli = prev.cursor-cli.overrideAttrs (old: {
+        nativeBuildInputs = [
+          (prev.patchelf.overrideAttrs (finalAttrs: previousAttrs: {
+            version = "0.15.2";
+            src = prev.fetchurl {
+              url = "https://github.com/NixOS/patchelf/releases/download/${finalAttrs.version}/patchelf-${finalAttrs.version}.tar.bz2";
+              hash = "sha256-F3RfVkFZyOIo/EEtplogSLhGxLa0Igt3y/IkFuAvLXw=";
+            };
+          }))
+        ] ++ (old.nativeBuildInputs or []);
+      });
+    })
+  ];
+
   # The home.packages option allows you to install Nix packages into your
   # environment.
   home.packages = with pkgs; [
+    pkgs.cursor-cli
     (writeScriptBin "split-cue" (builtins.readFile ../bin/split.rb))
     (writeScriptBin "shift-track-numbers" (builtins.readFile ../bin/shift-track-numbers.rb))
     (writeShellScriptBin "chapters" ''
@@ -227,6 +244,8 @@
 
   # Subpipe + Bielik/CUDA deps; leave false on hosts that should not pull them.
   subtitling.enable = true;
+
+
 
   imports = [
     ../modules/home/browser.nix

@@ -24,6 +24,19 @@
         inherit (final) system config;
       };
     };
+    overlay-cursor = final: prev: {
+      cursor-cli = prev.cursor-cli.overrideAttrs (old: {
+      nativeBuildInputs = [
+        (prev.patchelf.overrideAttrs (finalAttrs: previousAttrs: {
+          version = "0.15.2";
+          src = prev.fetchurl {
+            url = "https://github.com/NixOS/patchelf/releases/download/${finalAttrs.version}/patchelf-${finalAttrs.version}.tar.bz2";
+            hash = "sha256-F3RfVkFZyOIo/EEtplogSLhGxLa0Igt3y/IkFuAvLXw=";
+          };
+        }))
+        ] ++ (old.nativeBuildInputs or []);
+      });
+    };
     openblas-fix = final: prev: {
       openblas = prev.openblas.overrideAttrs (oldAttrs: {
         doCheck = false;

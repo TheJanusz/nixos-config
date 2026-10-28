@@ -15,4 +15,5 @@ in {
   "wg-client-privatekey.age".publicKeys = [ user1 system1 homelab ];
   "nextcloud-postgres-pass.age".publicKeys = [ user1 system1 homelab ];
   "fluxer-env.age".publicKeys = [ user1 system1 homelab ];
+  "musicbrainz-replication.age".publicKeys = [ user1 system1 homelab ];
 }

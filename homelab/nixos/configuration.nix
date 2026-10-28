@@ -149,6 +149,15 @@
   };
 
   server.jellyfin.enable = true;
+
+  # Private MusicBrainz mirror on the root NVMe. Replication starts after
+  # secrets/musicbrainz-replication.age exists (see
+  # modules/server/musicbrainz-replication.example); the container cron then
+  # catches up once a day. The first dump import is `sudo musicbrainz-load`,
+  # not this rebuild. After that import, set Jellyfin's MusicBrainz server to
+  # http://127.0.0.1:5000 here and http://10.100.0.1:5000 on the desktop,
+  # with rate limit 0.1.
+  server.musicbrainz.enable = true;
   server.seerr.enable = true;
 
   server.git-server.enable = true;

@@ -11,6 +11,7 @@
     ./nextcloud.nix
     ./fluxer.nix
     ./git-server.nix
+    ./musicbrainz.nix
     # ./wireguard.nix
   ];
 

@@ -1,0 +1,13 @@
+# MetaBrainz Live Data Feed token for the homelab MusicBrainz mirror.
+#
+# 1. Sign up for a free non-commercial token:
+#    https://musicbrainz.org/doc/Live_Data_Feed
+# 2. Encrypt it (one line, the 40-character token, nothing else):
+#    agenix -e secrets/musicbrainz-replication.age
+# 3. This repo is a flake, so Nix only sees the file once Git does:
+#    git add secrets/musicbrainz-replication.age
+# 4. Rebuild the homelab. The encrypted file is safe to commit. Replication
+#    is wired up only after it exists; until then the mirror still serves
+#    whatever the dump import loaded.
+#
+# The file is listed in secrets/secrets.nix for user1, system1, and homelab.

@@ -76,6 +76,11 @@ in
 
     boot.initrd.availableKernelModules = cfg.networkModules;
 
+    # r8125 is Realtek's out-of-tree 2.5GbE driver. The in-tree kernel has no
+    # module by that name (RTL8125 is served by r8169), so listing it in the
+    # initrd without the package makes the module closure fail.
+    boot.extraModulePackages = lib.optional (lib.elem "r8125" cfg.networkModules) config.boot.kernelPackages.r8125;
+
     boot.initrd.network = {
       enable = true;
       ssh = {

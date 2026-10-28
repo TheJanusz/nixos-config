@@ -12,6 +12,7 @@
     ./fluxer.nix
     ./git-server.nix
     ./musicbrainz.nix
+    ./lrclib.nix
     # ./wireguard.nix
   ];
 

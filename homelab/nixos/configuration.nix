@@ -158,6 +158,12 @@
   # http://127.0.0.1:5000 here and http://10.100.0.1:5000 on the desktop,
   # with rate limit 0.1.
   server.musicbrainz.enable = true;
+
+  # Private LRCLIB lyrics server on the root NVMe. The database is not part of
+  # the rebuild: sudo lrclib-load <dump URL> from https://lrclib.net/db-dumps.
+  # The official Jellyfin LrcLib plugin cannot change its host. Use the Lyrics
+  # plugin URL http://127.0.0.1:3300 here and http://10.100.0.1:3300 on the desktop.
+  server.lrclib.enable = true;
   server.seerr.enable = true;
 
   server.git-server.enable = true;

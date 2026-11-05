@@ -107,7 +107,9 @@ in
         "memories.vod.cachedir" = "${goVodState}/cache";
       };
       phpOptions = {
-        "openssl.cafile" = "../../misc/rootCA.crt";
+        # System bundle already includes misc/rootCA.crt via security.pki.certificateFiles.
+        # A repo-relative path is missing from php-fpm's cwd, so discovery TLS fails.
+        "openssl.cafile" = config.security.pki.caBundle;
         "opcache.enable" = "1";
         "opcache.enable_cli" = "1";          # Crucial for CLI warnings
         "opcache.interned_strings_buffer" = "16"; # Increase if needed

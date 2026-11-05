@@ -130,6 +130,9 @@ in
   systemd.network.networks."50-wg0" = {
     matchConfig.Name = "wg0";
     address = [ "10.100.0.1/24" ];
+    # Only this zone goes to dnsmasq. Public names stay on the global resolvers.
+    dns = [ "127.0.0.1" ];
+    domains = [ "~internal" ];
   };
 
   #   {

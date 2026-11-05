@@ -153,14 +153,14 @@ in
   #   };
   # };
 
-  # Need to disable this, because it blocks dnsmasq port
+  # Global servers are public resolvers only. *.internal is routed to dnsmasq
+  # from the wg0 network, so Quad9's signed NXDOMAIN cannot override it.
+  # The stub is 127.0.0.53; dnsmasq bind-dynamic does not bind that address.
   services.resolved = {
     enable = true;
-
-    settings = {
-      Resolve = {
-        DNSStubListener = false;
-      };
+    settings.Resolve = {
+      DNS = [ "192.168.1.1" "9.9.9.9" ];
+      DNSStubListener = true;
     };
   };
 

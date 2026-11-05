@@ -13,6 +13,7 @@
     ./git-server.nix
     ./musicbrainz.nix
     ./lrclib.nix
+    ./selfcheck.nix
     # ./wireguard.nix
   ];
 

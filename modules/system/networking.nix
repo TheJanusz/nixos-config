@@ -14,11 +14,12 @@ in
   # Enable networking
   networking.hostName = "nixos"; # Define your hostname.
   networking.networkmanager.enable = true;
+  networking.networkmanager.dns = "systemd-resolved";
   networking.useNetworkd = true;
   # SLAAC/RA assigns a global v6 address, but the ISP/router path is dead
   # (AAAA connect timeouts in abcde/Mojo, ping -6 never leaves). Prefer v4.
   networking.enableIPv6 = false;
-  networking.nameservers = [ "127.0.0.1" "192.168.1.1" "9.9.9.9" ];
+  networking.nameservers = [ "192.168.1.1" "9.9.9.9" ];
   networking.firewall.allowedTCPPorts = [ 80 443 ];
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
   security.pki.certificateFiles = [ ../../misc/rootCA.crt ];
@@ -39,8 +40,6 @@ in
 
     privateKeyFile = config.age.secrets.wg-client-privatekey.path;
 
-    dns = [ "10.100.0.1" ];
-
     peers = [
       {
         publicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
@@ -50,6 +49,21 @@ in
         endpoint = "95.215.29.152:51820";
       }
     ];
+  };
+
+  # wg-quick's DNS= line replaces every nameserver for as long as wg0 exists,
+  # including while the homelab is powered off. Route only *.internal there.
+  services.resolved = {
+    enable = true;
+    settings.Resolve.DNS = [ "192.168.1.1" "9.9.9.9" ];
+  };
+  systemd.services.wg-quick-wg0 = {
+    after = [ "systemd-resolved.service" ];
+    wants = [ "systemd-resolved.service" ];
+    postStart = ''
+      ${pkgs.systemd}/bin/resolvectl dns wg0 10.100.0.1
+      ${pkgs.systemd}/bin/resolvectl domain wg0 '~internal'
+    '';
   };
   #   {
   #     interface = "wg0";

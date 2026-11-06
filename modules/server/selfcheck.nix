@@ -21,9 +21,14 @@ let
   script = pkgs.writeShellScript "homelab-selfcheck" ''
     set -u
     fail=0
+    # getent follows nsswitch. mdns4_minimal [NOTFOUND=return] sits in front of
+    # resolve, so a public name can come back empty while resolvectl has it.
+    a_records() {
+      resolvectl query --type=A --legend=no "$1" | awk '{print $4}' | sort -u | paste -sd' ' -
+    }
     check() {
       local name="$1" expect="$2" got
-      got=$(getent hosts "$name" | awk '{print $1}' | sort -u | paste -sd' ' -)
+      got=$(a_records "$name")
       if [[ "$got" == "$expect" ]]; then
         printf 'ok %s -> %s\n' "$name" "$expect"
       else
@@ -36,7 +41,7 @@ let
     '') records}
     public() {
       local name="$1" got
-      got=$(getent hosts "$name" | awk '{print $1}' | sort -u | paste -sd' ' -)
+      got=$(a_records "$name")
       if [[ -n "$got" ]]; then
         printf 'ok %s -> %s\n' "$name" "$got"
       else
@@ -71,7 +76,7 @@ in
       after = [ "dnsmasq.service" "systemd-resolved.service" ];
       requires = [ "dnsmasq.service" "systemd-resolved.service" ];
       path = [
-        pkgs.glibc.bin
+        pkgs.systemd
         pkgs.gawk
         pkgs.coreutils
         pkgs.dig

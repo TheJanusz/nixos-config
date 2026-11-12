@@ -14,6 +14,7 @@
       ../../modules/system/networking.nix
       ../../modules/system/gaming.nix
       ../../modules/system/crypt.nix
+      ../../modules/home/browser.nix
       # ../../modules/server
     ];
 

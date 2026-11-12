@@ -245,6 +245,8 @@
   # Subpipe + Bielik/CUDA deps; leave false on hosts that should not pull them.
   subtitling.enable = true;
 
+  browser.webApps = import ../modules/home/web-apps.nix;
+
 
 
   imports = [

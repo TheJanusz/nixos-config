@@ -5,6 +5,9 @@ let
     _args = [ keys (mkLuaInline dsp) ] ++ lib.optional (flags != { }) flags;
   };
   modKey = rest: mkLuaInline ''mod .. " + ${rest}"'';
+  # {text} drops the combi mode name. fzf sort ranks the visible name, so
+  # "Steam" beats a game whose launch command merely contains steam.
+  rofi-launcher = "rofi -show combi -combi-modes drun,run -combi-display-format {text} -sort -sorting-method fzf";
   # BSD-3 Lua package. Gives each monitor a fixed workspace range.
   split-monitor-workspaces = pkgs.fetchFromGitHub {
     owner = "zjeffer";
@@ -84,8 +87,46 @@ in
 {
   home.packages = [
     pkgs.grimblast # screenshots
+    pkgs.libnotify
     hypr-session-restore
   ];
+  # The compositor start hook launches mako. The D-Bus service file asks
+  # systemd for mako.service, so that unit has to exist or activation fails.
+  # It is not WantedBy the session; hyprland.start is the start path.
+  services.mako = {
+    enable = true;
+    settings = {
+      anchor = "bottom-center";
+      layer = "overlay";
+      border-size = 2;
+      border-radius = 5;
+      border-color = "#008d4f";
+      background-color = "#1e1e1e";
+      text-color = "#ffffff";
+      # 0 never expires. ignore-timeout drops the expire time apps send.
+      default-timeout = 0;
+      ignore-timeout = true;
+      # Left click would otherwise invoke the default action and focus the sender.
+      on-button-left = "dismiss";
+      icons = true;
+      max-visible = 5;
+    };
+  };
+  systemd.user.services.mako = {
+    Unit = {
+      Description = "Lightweight Wayland notification daemon";
+      Documentation = "man:mako(1)";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      Type = "dbus";
+      BusName = "org.freedesktop.Notifications";
+      ExecCondition = "${pkgs.runtimeShell} -c '[ -n \"$WAYLAND_DISPLAY\" ]'";
+      ExecStart = lib.getExe config.services.mako.package;
+      ExecReload = "${lib.getExe' config.services.mako.package "makoctl"} reload";
+    };
+  };
   # Official TTY launcher starts the watchdog; the raw Hyprland binary warns.
   home.shellAliases.Hyprland = "start-hyprland";
   programs.kitty.enable = true;
@@ -156,6 +197,7 @@ in
             hl.exec_cmd("sh -c 'sleep 2 && hypr-session-restore restore'")
             hl.exec_cmd("sh -c 'pgrep -f \"[h]ypr-session-restore daemon\" >/dev/null || hypr-session-restore daemon'")
             hl.exec_cmd("sh -c 'pgrep -f \"[x]wayland-primary-dp3\" >/dev/null || ${lib.getExe xwayland-primary}'")
+            hl.exec_cmd("sh -c 'pgrep -x mako >/dev/null || ${lib.getExe config.services.mako.package}'")
           end
         '')
       ];
@@ -169,7 +211,7 @@ in
       (bind (modKey "O") ''hl.dsp.exec_cmd("obsidian")'' { })
       (bind (modKey "D") ''hl.dsp.exec_cmd("discord")'' { })
       (bind (modKey "P") ''hl.dsp.exec_cmd("bitwarden")'' { })
-      (bind (modKey "R") ''hl.dsp.exec_cmd("rofi -show run")'' { })
+      (bind (modKey "R") ''hl.dsp.exec_cmd("${rofi-launcher}")'' { })
       (bind (modKey "H") ''hl.dsp.focus({ direction = "left" })'' { })
       (bind (modKey "J") ''hl.dsp.focus({ direction = "down" })'' { })
       (bind (modKey "K") ''hl.dsp.focus({ direction = "up" })'' { })
@@ -209,6 +251,8 @@ in
       (bind (modKey "SHIFT + F") ''hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" })'' { })
       (bind (modKey "SHIFT + A") ''hl.dsp.exec_cmd("grimblast copysave area")'' { })
       (bind (modKey "SHIFT + W") ''hl.dsp.exec_cmd("grimblast copysave active")'' { })
+      (bind (modKey "G") ''hl.dsp.exec_cmd("${lib.getExe' config.services.mako.package "makoctl"} dismiss")'' { })
+      (bind (modKey "SHIFT + G") ''hl.dsp.exec_cmd("${lib.getExe' config.services.mako.package "makoctl"} restore")'' { })
       (bind "XF86AudioRaiseVolume" ''hl.dsp.exec_cmd("wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+")'' {
         repeating = true;
         locked = true;
@@ -223,6 +267,46 @@ in
       (bind "XF86AudioMute" ''hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_SINK@ toggle")'' {
         locked = true;
       })
+    ];
+    # float is static: it sees initial class and initial title only. Brave
+    # extension popups carry the extension id there, then rename themselves.
+    window_rule = [
+      {
+        name = "float-brave-extension-class";
+        # PWAs use this same class with the app name as the initial title.
+        # Extension popups use _crx_<id> until they rename themselves.
+        match.class = "brave-[a-p]{32}-Default";
+        match.initial_title = "_crx_[a-p]{32}";
+        float = true;
+      }
+      {
+        name = "float-brave-extension-title";
+        # Installed PWAs share this initial title but use class crx_<id>.
+        match.class = "negative:crx_[a-p]{32}";
+        match.initial_title = "_crx_[a-p]{32}";
+        float = true;
+      }
+      {
+        name = "size-bitwarden-class";
+        # FullMatch: the whole class is brave-<id>-Default, not the id alone.
+        match.class = "brave-nngceckbapebfimnlniiiahkandclblb-Default";
+        float = true;
+        size = "400 600";
+        center = true;
+      }
+      {
+        name = "size-bitwarden-title";
+        match.initial_title = "_crx_nngceckbapebfimnlniiiahkandclblb";
+        float = true;
+        size = "400 600";
+        center = true;
+      }
+      {
+        name = "tile-brave-pwa";
+        match.class = "brave-[a-p]{32}-Default";
+        match.initial_title = "negative:_crx_[a-p]{32}";
+        tile = true;
+      }
     ];
   };
 
@@ -241,7 +325,7 @@ in
     bind = SUPER, O, exec, obsidian
     bind = SUPER, D, exec, discord
     bind = SUPER, P, exec, bitwarden
-    bind = SUPER, R, exec, rofi -show run
+    bind = SUPER, R, exec, ${rofi-launcher}
     bind = SUPER, H, movefocus, l
     bind = SUPER, J, movefocus, d
     bind = SUPER, K, movefocus, u
@@ -257,12 +341,20 @@ in
     bind = SUPER SHIFT, F, fullscreen, 1
     bind = SUPER SHIFT, A, exec, grimblast copysave area
     bind = SUPER SHIFT, W, exec, grimblast copysave active
+    bind = SUPER, G, exec, ${lib.getExe' config.services.mako.package "makoctl"} dismiss
+    bind = SUPER SHIFT, G, exec, ${lib.getExe' config.services.mako.package "makoctl"} restore
     bindle = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%+
     bindle = ,XF86AudioLowerVolume, exec, wpctl set-volume -l 1.5 @DEFAULT_SINK@ 5%-
     bindl = ,XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_SOURCE@ toggle
     bindl = ,XF86AudioMute, exec, wpctl set-mute @DEFAULT_SINK@ toggle
     exec-once = waybar
     exec-once = sh -c 'pgrep -f "[x]wayland-primary-dp3" >/dev/null || ${lib.getExe xwayland-primary}'
+    exec-once = sh -c 'pgrep -x mako >/dev/null || ${lib.getExe config.services.mako.package}'
+    windowrule = match:class brave-[a-p]{32}-Default, match:initial_title _crx_[a-p]{32}, float on
+    windowrule = match:class negative:crx_[a-p]{32}, match:initial_title _crx_[a-p]{32}, float on
+    windowrule = match:class brave-nngceckbapebfimnlniiiahkandclblb-Default, float on, size 400 600, center on
+    windowrule = match:initial_title _crx_nngceckbapebfimnlniiiahkandclblb, float on, size 400 600, center on
+    windowrule = match:class brave-[a-p]{32}-Default, match:initial_title negative:_crx_[a-p]{32}, tile on
     general {
       col.active_border = rgb(0,141,79)
       gaps_in = 2

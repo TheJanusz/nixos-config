@@ -158,6 +158,8 @@ in
         # Outbound WOPI to Nextcloud is still HTTPS; use the system bundle
         # (includes misc/rootCA.crt) instead of Collabora's dummy CA chain.
         ssl.ca_file_path = config.security.pki.caBundle;
+        # proto=all binds ::1 only, which refuses 127.0.0.1. WOPI and Caddy use that address.
+        net.proto = "IPv4";
         net.listen = "loopback";
         net.post_allow.host = [ ''127\.0\.0\.1'' "::1" ];
         storage.wopi."@allow" = true;

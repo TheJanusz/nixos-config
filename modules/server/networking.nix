@@ -64,11 +64,11 @@ in
     wants = lib.optional config.systemd.sysusers.enable "agenix-chown.service";
     restartTriggers = [ config.age.secrets.wg-peers.file ];
     serviceConfig.ExecStartPre = lib.mkBefore [
-      (pkgs.writeShellScript "wg-peer-dropin" ''
+      "+${pkgs.writeShellScript "wg-peer-dropin" ''
         set -euo pipefail
         ${pkgs.coreutils}/bin/install -d -m 0750 -o root -g systemd-network /run/systemd/network/50-wg0.netdev.d
         ${pkgs.coreutils}/bin/ln -sfn ${config.age.secrets.wg-peers.path} /run/systemd/network/50-wg0.netdev.d/peers.conf
-      '')
+      ''}"
     ];
   };
   systemd.network.networks."50-wg0" = {

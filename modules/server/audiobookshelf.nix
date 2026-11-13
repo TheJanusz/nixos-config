@@ -82,6 +82,9 @@ in
     settings.bind-dynamic = true;
     settings.expand-hosts = true;
     settings.domain = "internal";
+    # /etc/hosts maps nextcloud.internal to 127.0.0.1 for local WOPI.
+    # Without this, dnsmasq serves that address to WireGuard clients.
+    settings.no-hosts = true;
     settings.listen-address = [ "127.0.0.1" "10.100.0.1" ];
     settings.address = [
       "/authentik.internal/10.100.0.1"

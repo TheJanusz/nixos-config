@@ -97,7 +97,7 @@ let
 
   copyStack = pkgs.writeShellScript "fluxer-copy-stack" ''
     set -euo pipefail
-    ${pkgs.gnutar}/bin/tar -xzf ${composeArchive} -C ${stateDir}
+    ${pkgs.gzip}/bin/gzip -dc ${composeArchive} | ${pkgs.gnutar}/bin/tar -x -C ${stateDir}
   '';
 
   # The age file is filled by hand. Fail before the compose files are replaced

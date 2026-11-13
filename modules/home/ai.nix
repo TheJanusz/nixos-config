@@ -64,7 +64,7 @@
     curl        # HTTP; well-known, health, APIs
     unzip       # Open zip artifacts
     # Nix
-    nixfmt-rfc-style  # Format .nix (command: nixfmt)
+    nixfmt  # Format .nix (RFC style; command: nixfmt)
     nix-output-monitor # `nom`; clearer nix build logs
     nvd         # Diff nixos/home generations after a switch
     nix-tree    # Why is this store path in my closure?

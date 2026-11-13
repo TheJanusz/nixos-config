@@ -10,7 +10,14 @@ in
     mode = "640";
   };
   age.secrets.wg-client-privatekey.file = ../../secrets/wg-client-privatekey.age;
-  # age.secrets.wg-peers.file = ../../secrets/wg-peers.conf.age;
+  # Peer stanzas, including the device comments, live in this file.
+  # networkd reads them from /run after agenix decrypts. Nix never opens it.
+  age.secrets.wg-peers = {
+    file = ../../secrets/wg-peers.conf.age;
+    owner = "systemd-network";
+    group = "systemd-network";
+    mode = "0440";
+  };
 
   # Enable networking
   networking.hostName = "nixos"; # Define your hostname.
@@ -47,85 +54,22 @@ in
       PrivateKeyFile = config.age.secrets.wg-privatekey.path;
       ListenPort = 51820;
     };
+  };
 
-    wireguardPeers = [
-        {
-          PublicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
-          AllowedIPs = [ "10.100.0.1/32" ];
-        }
-        {
-          PublicKey = "ZaWx5fsejzyXHGZymPVmel8xbgrxVEL4J/5eTAvEiCs=";
-          AllowedIPs = [ "10.100.0.2/32" ];
-        }
-        {
-          PublicKey = "95NL8dz+xDNUgmiW6Oc9rMfFguBu9LuiUnDukkFCq2M=";
-          AllowedIPs = [ "10.100.0.3/32" ];
-        }
-        {
-          PublicKey = "pA2hyTfIGACpDVh23xpP8+9xVzeCJSy7aCaoYqjqnVU=";
-          AllowedIPs = [ "10.100.0.4/32" ];
-        }
-        {
-          PublicKey = "Q8F6OyfCIh0IP5l3OrdCEYrvlXMw2SP1gJKoks6klHE=";
-          AllowedIPs = [ "10.100.0.5/32" ];
-        }
-        # Mama telefon
-        {
-          PublicKey = "uFcWY4IrE3/5iPJPfcRbawrWiANapbgs1es5fX8XQAE=";
-          AllowedIPs = [ "10.100.0.6/32" ];
-        }
-        # Tata telefon
-        {
-          PublicKey = "GkTBoCmS6V6mkRzLUs9VneCwNVcs04PToEBj8x6FzEs=";
-          AllowedIPs = [ "10.100.0.7/32" ];
-        }
-        # Tata desktop
-        {
-          PublicKey = "45lHqfHfxTlxvcyFQhAMOKmcRmxf3nJD7+IDOBWW9wA=";
-          AllowedIPs = [ "10.100.0.8/32" ];
-        }
-        # Mateusz Desktop
-        {
-          PublicKey = "k6EkPxQlOshhxdTQMUiCR4mEYb+YShr1ueTAGWg/whA=";
-          AllowedIPs = [ "10.100.0.9/32" ];
-        }
-        # Krzysiu laptop
-        {
-          PublicKey = "K/O4/UHpSerkJn7SPYdN2pyiZ2rfUL8M9goCjUy6PRo=";
-          AllowedIPs = [ "10.100.0.10/32" ];
-        }
-        # Globus telefon
-        {
-          PublicKey = "7oZH2qjjG68CE/Jn+uHvR+bedJh/oAUEGX2W4uia8XY=";
-          AllowedIPs = [ "10.100.0.11/32" ];
-        }
-        #  Janusz Desktop
-        {
-          PublicKey = "e++VPiRBioRZTfiuYEvTOiC+2TrhxRYKt8f6faMfd2M=";
-          AllowedIPs = [ "10.100.0.12/32" ];
-        }
-        # Mama laptop
-        {
-          PublicKey = "uNagg7MXZv/IuB0T+PzcRHN6PUYkrX+In2m8irGNMRo=";
-          AllowedIPs = [ "10.100.0.13/32" ];
-        }
-        # Wiktoria telefon
-        {
-          PublicKey = "2QxvGWoK+MukUr6l0iJ+vN/+j7CN6fZEPJE7TPbKOFo=";
-          AllowedIPs = [ "10.100.0.14/32" ];
-        }
-        # Tusia telefon
-        {
-          PublicKey = "tOfINUwFUgidWK8L6dEqV2YNzmb2Pz5WDLZ89KUUen8=";
-          AllowedIPs = [ "10.100.0.15/32" ];
-        }
-        # Globus desktop
-        {
-          PublicKey = "Y8rv+XPv5gQDf5QrzS59zW3srKU8EpufbXF1RORYQjI=";
-          AllowedIPs = [ "10.100.0.16/32" ];
-        }
-      ];
-
+  # With sysusers disabled, agenix decrypts during activation, before systemd
+  # starts. With sysusers enabled, agenix-chown.service must finish first
+  # because networkd runs as systemd-network and the file is mode 0440.
+  systemd.services.systemd-networkd = {
+    after = lib.optional config.systemd.sysusers.enable "agenix-chown.service";
+    wants = lib.optional config.systemd.sysusers.enable "agenix-chown.service";
+    restartTriggers = [ config.age.secrets.wg-peers.file ];
+    serviceConfig.ExecStartPre = lib.mkBefore [
+      (pkgs.writeShellScript "wg-peer-dropin" ''
+        set -euo pipefail
+        ${pkgs.coreutils}/bin/install -d -m 0750 -o root -g systemd-network /run/systemd/network/50-wg0.netdev.d
+        ${pkgs.coreutils}/bin/ln -sfn ${config.age.secrets.wg-peers.path} /run/systemd/network/50-wg0.netdev.d/peers.conf
+      '')
+    ];
   };
   systemd.network.networks."50-wg0" = {
     matchConfig.Name = "wg0";
@@ -134,65 +78,6 @@ in
     dns = [ "127.0.0.1" ];
     domains = [ "~internal" ];
   };
-
-  #   {
-  #     interface = "wg0";
-  #     protocol = "tcp";
-  #     destinationPort = 8096;
-  #     action = "accept";
-  #   }
-  # ];
-  #
-  # systemd.network = {
-  #   enable = true;
-  #
-  #   netdevs."50-wg0" = {
-  #     netdevConfig = {
-  #       Kind = "wireguard";
-  #       Name = "wg0";
-  #     };
-  #
-  #     wireguardConfig = {
-  #       ListenPort = 51820;
-  #       PrivateKeyFile = config.age.secrets.wg-privatekey.path;
-  #       FirewallMark = 42; # Marks packets for policy routing
-  #     };
-  #
-  #     wireguardPeers = [
-  #       {
-  #         PublicKey = "+qvhw3Mvni0mpxMQw9EbCIy7ysrpvrM0g/lAO2GXjE8=";
-  #         AllowedIPs = [ "10.100.0.1/32" ];
-  #       }
-  #       {
-  #         PublicKey = "JVFZWH+N7bpc8176K8XvaUoJ7geYafzvS2gmQE5A8y4=";
-  #         AllowedIPs = [ "10.100.0.2/32" ];
-  #       }
-  #       {
-  #         PublicKey = "95NL8dz+xDNUgmiW6Oc9rMfFguBu9LuiUnDukkFCq2M=";
-  #         AllowedIPs = [ "10.100.0.3/32" ];
-  #       }
-  #       {
-  #         PublicKey = "pA2hyTfIGACpDVh23xpP8+9xVzeCJSy7aCaoYqjqnVU=";
-  #         AllowedIPs = [ "10.100.0.4/32" ];
-  #       }
-  #       {
-  #         PublicKey = "Q8F6OyfCIh0IP5l3OrdCEYrvlXMw2SP1gJKoks6klHE=";
-  #         AllowedIPs = [ "10.100.0.5/32" ];
-  #       }
-  #     ];
-  #     # let
-  #     #   tomlData = fromTOML (builtins.readFile config.age.secrets.wg-peers.path);
-  #     #   peersData = tomlData.peers or [];
-  #     # in
-  #     # map (peer: {
-  #     #   PublicKey = peer.publicKey;
-  #     #   AllowedIPs = peer.allowedIPs;
-  #     # }) peersData;
-  #
-  #   };
-  #
-  
-  # };
 
   # networking.nat = {
   #   enable = true;

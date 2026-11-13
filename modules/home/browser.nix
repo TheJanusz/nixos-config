@@ -10,6 +10,20 @@ let
     custom_name = app.name;
     fallback_app_name = app.name;
   };
+
+  # Host of https://fluxer.internal/ is fluxer.internal. Used when name is unset.
+  webAppHost = url:
+    let
+      rest = lib.removePrefix "https://" (lib.removePrefix "http://" url);
+      hostPort = lib.head (lib.splitString "/" rest);
+    in
+    lib.head (lib.splitString ":" hostPort);
+
+  webAppLabel = app: if app.name != null then app.name else webAppHost app.url;
+
+  # fluxer.desktop. A null name uses the host so the file id still exists.
+  webAppEntryId = app:
+    lib.toLower (builtins.replaceStrings [ " " ] [ "-" ] (webAppLabel app));
 in
 {
   options.browser.webApps = lib.mkOption {
@@ -23,6 +37,11 @@ in
           type = lib.types.nullOr lib.types.str;
           default = null;
           description = "Launcher name. Brave uses the manifest name when this is unset.";
+        };
+        icon = lib.mkOption {
+          type = lib.types.nullOr (lib.types.either lib.types.str lib.types.path);
+          default = null;
+          description = "Launcher icon. A path is copied into the Nix store.";
         };
       };
     });
@@ -56,6 +75,19 @@ in
       #defaultSearchProviderEnabled = true;
       #defaultSearchProviderSearchURL = "https://startpage.com";
     };
+
+    # Brave rewrites its own shortcut with NoDisplay=true. This file is ours.
+    xdg.desktopEntries = lib.listToAttrs (map (app: {
+      name = webAppEntryId app;
+      value = {
+        name = webAppLabel app;
+        exec = "brave --app=${app.url}";
+        terminal = false;
+        categories = [ "Network" ];
+      } // lib.optionalAttrs (app.icon != null) {
+        icon = app.icon;
+      };
+    }) cfg.webApps);
 
     # programs.firefox = {
     #   enable = true;

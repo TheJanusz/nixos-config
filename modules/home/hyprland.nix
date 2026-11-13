@@ -5,9 +5,11 @@ let
     _args = [ keys (mkLuaInline dsp) ] ++ lib.optional (flags != { }) flags;
   };
   modKey = rest: mkLuaInline ''mod .. " + ${rest}"'';
-  # {text} drops the combi mode name. fzf sort ranks the visible name, so
+  # drun is desktop entries only. fzf sort ranks the visible name, so
   # "Steam" beats a game whose launch command merely contains steam.
-  rofi-launcher = "rofi -show combi -combi-modes drun,run -combi-display-format {text} -sort -sorting-method fzf";
+  # Colors are in rofi/config.rasi, which rofi merges onto its default theme.
+  # -theme would replace that theme and drop the list colors and prompt.
+  rofi-launcher = "rofi -show drun -show-icons -sort -sorting-method fzf -p Launch -font 'mono 14'";
   # BSD-3 Lua package. Gives each monitor a fixed workspace range.
   split-monitor-workspaces = pkgs.fetchFromGitHub {
     owner = "zjeffer";
@@ -381,6 +383,104 @@ in
       split_width_multiplier = 1
       preserve_split = false
       permanent_direction_override = false
+    }
+  '';
+
+  # Fluxer "Dark" theme, merged over rofi's default (no @theme).
+  # Surfaces hsl(258, 10%, …), text at 96%, brand hsl(242, 70%, 55%).
+  xdg.configFile."rofi/config.rasi".text = ''
+    configuration {
+        font: "mono 14";
+        display-drun: "Launch";
+    }
+    * {
+        background:                  #0c0b0e;
+        foreground:                  #f4f4f6;
+        border-color:                #413cdd;
+        separatorcolor:              #2f2c36;
+        normal-background:           #0c0b0e;
+        normal-foreground:           #f4f4f6;
+        alternate-normal-background: #0c0b0e;
+        alternate-normal-foreground: #f4f4f6;
+        selected-normal-background:  #242326;
+        selected-normal-foreground:  #f4f4f6;
+        active-background:           #0c0b0e;
+        active-foreground:           #b0adff;
+        selected-active-background:  #242326;
+        selected-active-foreground:  #f4f4f6;
+        alternate-active-background: #0c0b0e;
+        alternate-active-foreground: #b0adff;
+        urgent-background:           #0c0b0e;
+        urgent-foreground:           #e25c5c;
+        selected-urgent-background:  #242326;
+        selected-urgent-foreground:  #e25c5c;
+        alternate-urgent-background: #0c0b0e;
+        alternate-urgent-foreground: #e25c5c;
+    }
+    window {
+        width:            60ch;
+        padding:          8px;
+        background-color: #0c0b0e;
+        border:           2px;
+        border-color:     #413cdd;
+        border-radius:    8px;
+    }
+    mainbox {
+        background-color: transparent;
+    }
+    inputbar {
+        padding:          6px 8px;
+        margin:           0px 0px 6px 0px;
+        background-color: #1a181e;
+        text-color:       #f4f4f6;
+        border-radius:    6px;
+    }
+    prompt {
+        text-color:       #b0adff;
+        background-color: transparent;
+    }
+    textbox-prompt-colon, entry, case-indicator {
+        text-color:       #f4f4f6;
+        background-color: transparent;
+    }
+    entry {
+        placeholder-color: #cecbd4;
+    }
+    listview {
+        background-color: transparent;
+        border:           0px;
+        spacing:          2px;
+    }
+    scrollbar {
+        width:            6px;
+        handle-width:     4px;
+        handle-color:     #a0a0a059;
+        background-color: #00000073;
+    }
+    element {
+        padding:          4px 8px;
+        border-radius:    4px;
+        background-color: transparent;
+        text-color:       #f4f4f6;
+    }
+    element normal.normal,
+    element alternate.normal,
+    element normal.active,
+    element alternate.active {
+        background-color: #0c0b0e;
+        text-color:       #f4f4f6;
+    }
+    element selected.normal,
+    element selected.active {
+        background-color: #242326;
+        text-color:       #f4f4f6;
+    }
+    element-text, element-icon {
+        background-color: transparent;
+        text-color:       inherit;
+    }
+    element-text {
+        highlight: bold #b0adff;
     }
   '';
 

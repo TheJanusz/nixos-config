@@ -1,6 +1,7 @@
 { config, pkgs, lib, ... }:
 let
   port = 7687;
+  collaboraPort = 9980;
   # PHP-FPM's PrivateTmp and KillMode=control-group delete a go-vod it spawned
   # on every pool restart. Memories' external mode only health-checks this unit.
   goVodState = "/var/lib/nextcloud/go-vod";
@@ -128,15 +129,99 @@ in
         redis = true;
       };
       appstoreEnable = true;
+      extraAppsEnable = true;
+      extraApps = {
+        inherit (config.services.nextcloud.package.packages.apps) richdocuments;
+      };
     };
     services.redis.servers.nextcloud.enable = true;
 
     services.nginx.virtualHosts."${config.services.nextcloud.hostName}" = {
       listen = [{
-        addr = "0.0.0.0";
+        addr = "127.0.0.1";
         port = port;
       }];
     };
+
+    # coolwsd WOPI callbacks to https://nextcloud.internal hit local Caddy,
+    # not the wg0 hairpin to 10.100.0.1.
+    networking.hosts."127.0.0.1" = [ "nextcloud.internal" ];
+
+    services.collabora-online = {
+      enable = true;
+      port = collaboraPort;
+      aliasGroups = [{ host = "https://nextcloud.internal"; }];
+      settings = {
+        server_name = "nextcloud.internal";
+        ssl.enable = false;
+        ssl.termination = true;
+        # Outbound WOPI to Nextcloud is still HTTPS; use the system bundle
+        # (includes misc/rootCA.crt) instead of Collabora's dummy CA chain.
+        ssl.ca_file_path = config.security.pki.caBundle;
+        net.listen = "loopback";
+        net.post_allow.host = [ ''127\.0\.0\.1'' "::1" ];
+        storage.wopi."@allow" = true;
+        storage.wopi.host = [ ''nextcloud\.internal'' ];
+        num_prespawn_children = 1;
+      };
+    };
+
+    services.caddy.virtualHosts."nextcloud.internal".extraConfig = ''
+      tls ${config.age.secrets.wildcard-cert.path} ${config.age.secrets.wildcard-key.path}
+
+      @collabora path /browser* /hosting* /cool* /lool*
+      handle @collabora {
+        reverse_proxy http://127.0.0.1:${toString collaboraPort} {
+          header_up Host {host}
+          header_up X-Forwarded-Proto {scheme}
+          header_up X-Forwarded-For {remote_host}
+        }
+      }
+      handle {
+        reverse_proxy http://127.0.0.1:${toString port} {
+          header_up Host {host}
+          header_up X-Forwarded-Proto {scheme}
+          header_up X-Forwarded-For {remote_host}
+          header_up X-Real-IP {remote}
+        }
+      }
+    '';
+
+    systemd.services.nextcloud-config-collabora =
+      let
+        occ = lib.getExe config.services.nextcloud.occ;
+        wopiUrl = "http://127.0.0.1:${toString collaboraPort}";
+        callbackUrl = "https://${config.services.nextcloud.hostName}";
+      in
+      {
+        description = "Configure Nextcloud Office (richdocuments) for local Collabora";
+        wantedBy = [ "multi-user.target" ];
+        after = [
+          "nextcloud-setup.service"
+          "coolwsd.service"
+        ];
+        requires = [ "coolwsd.service" ];
+        wants = [ "nextcloud-setup.service" ];
+        script = ''
+          set -euo pipefail
+          ${occ} config:app:set richdocuments wopi_url --value ${lib.escapeShellArg wopiUrl}
+          ${occ} config:app:set richdocuments wopi_callback_url --value ${lib.escapeShellArg callbackUrl}
+          ${occ} config:app:set richdocuments wopi_allowlist --value ${lib.escapeShellArg "127.0.0.1,::1"}
+          ${occ} config:app:set richdocuments preview_generation --type boolean --value false
+          if ${occ} richdocuments:setup -w ${lib.escapeShellArg wopiUrl} -c ${lib.escapeShellArg callbackUrl}; then
+            :
+          elif ${occ} richdocuments:activate-config; then
+            :
+          else
+            echo "nextcloud-config-collabora: richdocuments:setup and richdocuments:activate-config both failed" >&2
+            exit 1
+          fi
+        '';
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+      };
 
     services.postgresql = {
       enable = true;

@@ -61,7 +61,8 @@ let
               makeWrapper ${vlcBase}/bin/$b "$out/bin/$b" \
                 --prefix PATH : ${prev.lib.makeBinPath [ prev.makemkv ]} \
                 --prefix LD_LIBRARY_PATH : ${mmbdCompat}/lib:${prev.makemkv}/lib \
-                --set MAKEMKVCON ${prev.makemkv}/bin/makemkvcon
+                --set MAKEMKVCON ${prev.makemkv}/bin/makemkvcon \
+                --add-flags "--no-one-instance-when-started-from-file"
             fi
           done
           # File managers / app launchers use this Exec, not PATH. symlinkJoin

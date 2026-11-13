@@ -54,9 +54,6 @@ in
         header_up X-Real-IP {remote}
       }
     '';
-    virtualHosts."nextcloud.internal".extraConfig = ''
-      reverse_proxy http://10.100.0.1:7687
-    '';
     virtualHosts."audiobookshelf.internal" = {
       extraConfig = ''
         tls ${config.age.secrets.wildcard-cert.path} ${config.age.secrets.wildcard-key.path}

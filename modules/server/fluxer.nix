@@ -7,24 +7,20 @@
 let
   cfg = config.server.fluxer;
 
-  # deploy/self-hosting from fluxerapp/fluxer @ main, 2026-09-14
-  fluxerRev = "c5aaf65a10395a0a7cd033007d7367b112ccfd2a";
-  stackFile =
-    name: hash:
-    pkgs.fetchurl {
-      url = "https://raw.githubusercontent.com/fluxerapp/fluxer/${fluxerRev}/deploy/self-hosting/${name}";
-      inherit hash;
-    };
-
-  composeYml = stackFile "docker-compose.yml" "sha256-WOBeVY6jWRfpqzHUroIwOk+ks0HrUrCGx8rUclUiJsM=";
-  composeProxyYml = stackFile "docker-compose.proxy.yml" "sha256-RSmFjPBPF7bFBQTWEHsoTVP3AZZlf4OoULqxpnA+YmQ=";
-  caddyfile = stackFile "Caddyfile" "sha256-6asaetmSERcvaM+icovuuG3U7SIGNcq1+EYbsrScsCM=";
+  # Compose bundle from the fluxer-release tag. Images are pinned inside it.
+  # FLUXER_SETTINGS_LOADED is what the bundle requires in order to run
+  # Compose directly. rexctl is not involved.
+  fluxerRelease = "2026.1112.20122";
+  composeArchive = pkgs.fetchurl {
+    url = "https://github.com/fluxerapp/fluxer/releases/download/fluxer-release%40${fluxerRelease}/fluxer-compose-${fluxerRelease}.tar.gz";
+    hash = "sha256-JszInnRI6T24UOrhrYd78VhrqD/voJzHsuSMRj3S/b0=";
+  };
 
   stateDir = "/var/lib/fluxer";
 
   publicEnv = pkgs.writeText "fluxer-public.env" ''
+    FLUXER_SETTINGS_LOADED=true
     FLUXER_DOMAIN=${cfg.domain}
-    FLUXER_IMAGE_TAG=${cfg.imageTag}
     FLUXER_PUBLIC_SCHEME=https
     FLUXER_PUBLIC_PORT=443
     FLUXER_EDGE_BIND=127.0.0.1:8080
@@ -32,18 +28,27 @@ let
     FLUXER_LIVEKIT_NODE_IP=${cfg.livekitNodeIp}
     FLUXER_EMAIL_ENABLED=false
     FLUXER_SSO_ALLOW_PRIVATE_ADDRESSES=true
+    # The bundle deletes files in the uploads bucket after 1 day unless this is off.
+    FLUXER_SEAWEEDFS_UPLOADS_TTL=off
+    # Bundle defaults are sized for a larger host (Postgres 5gb, API 2560mb).
     FLUXER_API_MEMORY_LIMIT=1gb
     FLUXER_API_MEMORY_RESERVATION=256mb
     FLUXER_WORKER_MEMORY_LIMIT=1gb
     FLUXER_WORKER_MEMORY_RESERVATION=256mb
     FLUXER_POSTGRES_MEMORY_LIMIT=1gb
     FLUXER_POSTGRES_MEMORY_RESERVATION=256mb
+    # Bundle shm (1gb) and shared_buffers (512MB) do not fit the 1gb cap above.
+    FLUXER_POSTGRES_SHM_SIZE=256mb
+    FLUXER_POSTGRES_SHARED_BUFFERS=128MB
+    FLUXER_POSTGRES_MAINTENANCE_WORK_MEM=64MB
+    FLUXER_POSTGRES_AUTOVACUUM_WORK_MEM=64MB
     FLUXER_SEAWEEDFS_MEMORY_LIMIT=512mb
     FLUXER_SEAWEEDFS_GOMEMLIMIT=384MiB
     FLUXER_MEILISEARCH_MEMORY_LIMIT=384mb
     FLUXER_MEILISEARCH_MAX_INDEXING_MEMORY=192mb
     FLUXER_GATEWAY_MEMORY_LIMIT=512mb
     FLUXER_GATEWAY_MEMORY_RESERVATION=256mb
+    FLUXER_MEDIA_PROXY_MEMORY_LIMIT=512mb
   '';
 
   # Homelab Caddy leaves are signed by misc/rootCA.crt. The API image does not
@@ -92,9 +97,37 @@ let
 
   copyStack = pkgs.writeShellScript "fluxer-copy-stack" ''
     set -euo pipefail
-    install -m0644 ${composeYml} ${stateDir}/docker-compose.yml
-    install -m0644 ${composeProxyYml} ${stateDir}/docker-compose.proxy.yml
-    install -m0644 ${caddyfile} ${stateDir}/Caddyfile
+    ${pkgs.gnutar}/bin/tar -xzf ${composeArchive} -C ${stateDir}
+  '';
+
+  # The age file is filled by hand. Fail before the compose files are replaced
+  # when the secret this release adds is still absent, or when an old LiveKit
+  # URL would send clients to a path this Caddyfile does not serve.
+  checkSecrets = pkgs.writeShellScript "fluxer-check-secrets" ''
+    set -euo pipefail
+    envf=${config.age.secrets.fluxer-env.path}
+    if [ ! -r "$envf" ]; then
+      echo "fluxer-env is not readable at $envf" >&2
+      exit 1
+    fi
+    pseudonym=
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        FLUXER_PROFILE_PSEUDONYM_SECRET=)
+          ;;
+        FLUXER_PROFILE_PSEUDONYM_SECRET=*)
+          pseudonym=1
+          ;;
+        FLUXER_LIVEKIT_URL=*gateway/livekit*)
+          echo "Delete FLUXER_LIVEKIT_URL from secrets/fluxer-env.age. This release serves voice at /livekit." >&2
+          exit 1
+          ;;
+      esac
+    done < "$envf"
+    if [ -z "$pseudonym" ]; then
+      echo "Add FLUXER_PROFILE_PSEUDONYM_SECRET to secrets/fluxer-env.age (openssl rand -hex 32). See modules/server/fluxer.env.example." >&2
+      exit 1
+    fi
   '';
 
   backupScript = pkgs.writeShellScript "fluxer-backup" ''
@@ -112,6 +145,11 @@ let
       tar czf "$backupDir/valkey-$ts.tgz" -C "$valkeyVol" .
     fi
 
+    natsVol=/var/lib/docker/volumes/fluxer_nats-data/_data
+    if [ -d "$natsVol" ]; then
+      tar czf "$backupDir/nats-$ts.tgz" -C "$natsVol" .
+    fi
+
     ${lib.optionalString (cfg.uploadsDir == null) ''
       seaweedVol=/var/lib/docker/volumes/fluxer_seaweedfs-data/_data
       if [ -d "$seaweedVol" ]; then
@@ -122,6 +160,7 @@ let
 
     find "$backupDir/postgres" -type f -name 'fluxer-*.dump' -mtime +14 -delete
     find "$backupDir" -maxdepth 1 -type f -name 'valkey-*.tgz' -mtime +14 -delete
+    find "$backupDir" -maxdepth 1 -type f -name 'nats-*.tgz' -mtime +14 -delete
   '';
 in
 {
@@ -132,12 +171,6 @@ in
       type = lib.types.str;
       default = "fluxer.internal";
       description = "Public hostname browsers use. Must match DNS and the wildcard cert.";
-    };
-
-    imageTag = lib.mkOption {
-      type = lib.types.str;
-      default = "v1";
-      description = "Fluxer image tag (FLUXER_IMAGE_TAG).";
     };
 
     livekitNodeIp = lib.mkOption {
@@ -162,7 +195,7 @@ in
       default = null;
       example = "/data/fluxer/backups";
       description = ''
-        Host directory for the daily Postgres dump (and Valkey AOF).
+        Host directory for the daily Postgres dump, plus Valkey and NATS tarballs.
         If uploadsDir is unset, also rsyncs SeaweedFS here.
         If uploadsDir already points at ZFS, media is left to snapshots of that dataset.
       '';
@@ -204,7 +237,10 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           StateDirectory = "fluxer";
-          ExecStartPre = copyStack;
+          ExecStartPre = [
+            checkSecrets
+            copyStack
+          ];
           ExecStart = "${fluxerCompose} up -d --remove-orphans";
           ExecStop = "${fluxerCompose} down";
           TimeoutStartSec = "15min";
